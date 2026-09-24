@@ -1,0 +1,10 @@
+{
+  "name": "callmycar",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "npm --prefix app/frontend run dev",
+    "build": "npm --prefix app/frontend run build",
+    "server": "npm --prefix app/backend start"
+  }
+}

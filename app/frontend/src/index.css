@@ -1,0 +1,28 @@
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    overscroll-behavior: none;
+  }
+  main > :first-child {
+    margin-top: 0 !important;
+  }
+  main > :last-child {
+    margin-bottom: 0 !important;
+  }
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom interactive tactile hover & press styles */
+.neo-btn {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.neo-btn:active {
+  transform: translate(2px, 2px);
+}
