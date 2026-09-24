@@ -6,5 +6,8 @@
     "dev": "npm --prefix app/frontend run dev",
     "build": "npm --prefix app/frontend run build",
     "server": "npm --prefix app/backend start"
+  },
+  "devDependencies": {
+    "vite": "^8.3.1"
   }
 }
