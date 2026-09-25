@@ -385,6 +385,12 @@ app.post('/api/sms', (req, res) => {
   });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`CallMyCar backend service running on http://localhost:${PORT}`);
-});
+// Vercel serverless export
+export default app;
+
+// Local development server
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`CallMyCar backend service running on http://localhost:${PORT}`);
+  });
+}
