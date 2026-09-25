@@ -272,6 +272,11 @@ app.post('/api/call', async (req, res) => {
         });
         const vapiData = await vapiResponse.json();
         console.log('[Vapi.ai Response]', vapiData);
+        // Store Vapi call ID for status polling
+        if (vapiData.id) {
+          session.vapiCallId = vapiData.id;
+          activeCalls.set(vapiData.id, session);
+        }
       }
     } catch (err) {
       console.error('[Vapi.ai Error]', err.message);
@@ -300,11 +305,32 @@ app.post('/api/call', async (req, res) => {
  * GET /api/status/:callId
  * Poll live status of ongoing AI Voice Call
  */
-app.get('/api/status/:callId', (req, res) => {
+app.get('/api/status/:callId', async (req, res) => {
   const { callId } = req.params;
   const session = activeCalls.get(callId);
 
+  // If not found locally, check if it's a Vapi call ID
   if (!session) {
+    if (process.env.VAPI_API_KEY) {
+      try {
+        const vapiRes = await fetch(`https://api.vapi.ai/call/${callId}`, {
+          headers: { 'Authorization': `Bearer ${process.env.VAPI_API_KEY}` },
+        });
+        if (vapiRes.ok) {
+          const vapiData = await vapiRes.json();
+          return res.json({
+            success: true,
+            callId,
+            status: vapiData.status || 'unknown',
+            step: vapiData.status === 'ended' ? 4 : 2,
+            message: `Vapi call status: ${vapiData.status}`,
+            vapiData,
+          });
+        }
+      } catch (err) {
+        console.error('[Vapi status fetch error]', err.message);
+      }
+    }
     return res.status(404).json({ error: 'Call session not found' });
   }
 
