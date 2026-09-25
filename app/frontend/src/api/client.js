@@ -1,4 +1,4 @@
-const BACKEND_URL = ''; // Relative URL handled by Vite proxy to backend
+const BACKEND_URL = import.meta.env.VITE_API_URL || '';
 
 export async function registerVehicle(vehicleData) {
   try {
