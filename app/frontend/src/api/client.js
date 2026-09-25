@@ -1,4 +1,4 @@
-const BACKEND_URL = import.meta.env.VITE_API_URL || '';
+const BACKEND_URL = '';
 
 export async function registerVehicle(vehicleData) {
   try {
