@@ -249,7 +249,7 @@ app.post('/api/call', async (req, res) => {
   if (process.env.VAPI_API_KEY && process.env.VAPI_ASSISTANT_ID) {
     try {
       console.log(`[Vapi.ai] Dispatching real voice agent call for ${vehicle.plate} (Assistant: ${process.env.VAPI_ASSISTANT_ID})`);
-      if (vehicle.ownerRealPhone) {
+      if (vehicle.ownerRealPhone && process.env.VAPI_PHONE_NUMBER_ID) {
         const vapiResponse = await fetch('https://api.vapi.ai/call/phone', {
           method: 'POST',
           headers: {
@@ -258,6 +258,7 @@ app.post('/api/call', async (req, res) => {
           },
           body: JSON.stringify({
             assistantId: process.env.VAPI_ASSISTANT_ID,
+            phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID,
             customer: {
               number: vehicle.ownerRealPhone,
             },
