@@ -7,38 +7,39 @@ import { lookupVehicle } from '../api/client';
 export default function Home() {
   const navigate = useNavigate();
   const [state, setState] = useState('DL');
-  const [plate, setPlate] = useState('DL 01 AB 1234');
   const [isVerified, setIsVerified] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
 
-  const formatPlate = (value) => {
-    const cleaned = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (cleaned.length <= 2) return cleaned;
-    if (cleaned.length <= 4) return `${cleaned.slice(0, 2)} ${cleaned.slice(2)}`;
-    if (cleaned.length <= 5) return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 4)} ${cleaned.slice(4)}`;
-    if (cleaned.length <= 6) return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 4)} ${cleaned.slice(4, 5)} ${cleaned.slice(5)}`;
-    if (cleaned.length <= 7) return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 4)} ${cleaned.slice(4, 6)} ${cleaned.slice(6)}`;
-    return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 4)} ${cleaned.slice(4, 6)} ${cleaned.slice(6, 8)} ${cleaned.slice(8)}`;
-  };
+  const [plateSegments, setPlateSegments] = useState({
+    state: 'DL',
+    district: '',
+    series: '',
+    number: '',
+  });
 
   const handleStateChange = (newState) => {
     setState(newState);
-    setPlate((prev) => {
-      const cleaned = prev.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (cleaned.startsWith(newState)) return formatPlate(prev);
-      return formatPlate(newState + cleaned.slice(2));
-    });
+    setPlateSegments((prev) => ({ ...prev, state: newState }));
     setIsVerified(false);
   };
 
-  const handleSelectDemoPlate = (st, pl) => {
-    handleStateChange(st);
-    setPlate(pl);
-    triggerLookup(st, pl);
+  const updateSegment = (segment, value) => {
+    const cleaned = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    let maxLength = 2;
+    if (segment === 'series') maxLength = 2;
+    if (segment === 'number') maxLength = 4;
+    setPlateSegments((prev) => ({ ...prev, [segment]: cleaned.slice(0, maxLength) }));
+    setIsVerified(false);
   };
 
-  const triggerLookup = async (st = state, pl = plate) => {
+  const getPlateString = () => {
+    const { state, district, series, number } = plateSegments;
+    return `${state} ${district} ${series} ${number}`.trim();
+  };
+
+  const triggerLookup = async (st = state) => {
+    const pl = getPlateString();
     if (!pl.trim()) return;
     await lookupVehicle(pl, st);
     setIsVerified(true);
@@ -46,8 +47,9 @@ export default function Home() {
 
   const handleProceedToContact = (e) => {
     if (e) e.preventDefault();
-    if (!plate.trim()) return;
-    navigate(`/contact/${encodeURIComponent(plate.trim())}?state=${state}`);
+    const pl = getPlateString();
+    if (!pl.trim()) return;
+    navigate(`/contact/${encodeURIComponent(pl.trim())}?state=${state}`);
   };
 
   const handleQuickAlert = (issueName) => {
@@ -409,23 +411,52 @@ export default function Home() {
                           </select>
                         </div>
 
-                        {/* License Plate Input Field */}
+                        {/* License Plate Input Field - Segmented */}
                         <div className="relative flex-1">
                           <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none opacity-40">
                             <span className="material-symbols-outlined text-[24px]">pin</span>
                           </div>
-                          <input
-                            id="plate-input"
-                            type="text"
-                            maxLength={18}
-                            value={plate}
-                            onChange={(e) => {
-                              setPlate(formatPlate(e.target.value));
-                              setIsVerified(false);
-                            }}
-                            placeholder="e.g., DL 01 AB 1234"
-                            className="w-full h-16 pl-12 pr-4 rounded-xl bg-surface-bright font-code-plate text-code-plate text-on-surface uppercase tracking-widest shadow-[4px_4px_0px_#141b2b] placeholder:text-on-surface-variant/40 focus:outline-none focus:bg-surface-container-low transition-colors"
-                          />
+                          <div className="flex items-center gap-2 pl-12 pr-4 h-16">
+                            <input
+                              id="plate-state"
+                              type="text"
+                              maxLength={2}
+                              value={plateSegments.state}
+                              onChange={(e) => updateSegment('state', e.target.value)}
+                              readOnly
+                              className="w-14 h-12 text-center bg-surface-container font-code-plate text-code-plate text-on-surface uppercase tracking-widest shadow-[2px_2px_0px_#141b2b] rounded-lg focus:outline-none"
+                            />
+                            <span className="text-on-surface-variant text-lg font-bold"> </span>
+                            <input
+                              id="plate-district"
+                              type="text"
+                              maxLength={2}
+                              value={plateSegments.district}
+                              onChange={(e) => updateSegment('district', e.target.value)}
+                              placeholder="01"
+                              className="w-14 h-12 text-center bg-surface-bright font-code-plate text-code-plate text-on-surface uppercase tracking-widest shadow-[2px_2px_0px_#141b2b] rounded-lg focus:outline-none focus:bg-surface-container-low transition-colors"
+                            />
+                            <span className="text-on-surface-variant text-lg font-bold"> </span>
+                            <input
+                              id="plate-series"
+                              type="text"
+                              maxLength={2}
+                              value={plateSegments.series}
+                              onChange={(e) => updateSegment('series', e.target.value)}
+                              placeholder="AB"
+                              className="w-14 h-12 text-center bg-surface-bright font-code-plate text-code-plate text-on-surface uppercase tracking-widest shadow-[2px_2px_0px_#141b2b] rounded-lg focus:outline-none focus:bg-surface-container-low transition-colors"
+                            />
+                            <span className="text-on-surface-variant text-lg font-bold"> </span>
+                            <input
+                              id="plate-number"
+                              type="text"
+                              maxLength={4}
+                              value={plateSegments.number}
+                              onChange={(e) => updateSegment('number', e.target.value)}
+                              placeholder="1234"
+                              className="w-24 h-12 text-center bg-surface-bright font-code-plate text-code-plate text-on-surface uppercase tracking-widest shadow-[2px_2px_0px_#141b2b] rounded-lg focus:outline-none focus:bg-surface-container-low transition-colors"
+                            />
+                          </div>
                         </div>
                       </div>
 
@@ -497,7 +528,7 @@ export default function Home() {
                           <span className="font-title-md text-title-md text-on-surface">
                             Vehicle Verified:{' '}
                             <span id="active-plate-preview" className="font-code-plate text-[20px] text-secondary">
-                              {state} • {plate}
+                              {getPlateString()}
                             </span>
                           </span>
                         </div>

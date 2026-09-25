@@ -7,29 +7,13 @@ import { registerVehicle } from '../api/client';
 export default function Register() {
   const navigate = useNavigate();
 
-  const formatPlate = (value) => {
-    const cleaned = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (cleaned.length <= 2) return cleaned;
-    if (cleaned.length <= 4) return `${cleaned.slice(0, 2)} ${cleaned.slice(2)}`;
-    if (cleaned.length <= 5) return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 4)} ${cleaned.slice(4)}`;
-    if (cleaned.length <= 6) return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 4)} ${cleaned.slice(4, 5)} ${cleaned.slice(5)}`;
-    if (cleaned.length <= 7) return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 4)} ${cleaned.slice(4, 6)} ${cleaned.slice(6)}`;
-    return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 4)} ${cleaned.slice(4, 6)} ${cleaned.slice(6, 8)} ${cleaned.slice(8)}`;
-  };
-
-  const handleStateChange = (newState) => {
-    setFormData((prev) => {
-      const cleaned = prev.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      const newPlate = cleaned.startsWith(newState) 
-        ? formatPlate(prev.plate)
-        : formatPlate(newState + cleaned.slice(2));
-      return { ...prev, state: newState, plate: newPlate };
-    });
-  };
-
   const [formData, setFormData] = useState({
-    plate: 'KA 03 MX 4020',
-    state: 'KA',
+    plateSegments: {
+      state: 'KA',
+      district: '',
+      series: '',
+      number: '',
+    },
     make: 'Hyundai',
     model: 'Ioniq 5',
     year: '2024',
@@ -39,6 +23,28 @@ export default function Register() {
     notifyCall: true,
     notifySms: true,
   });
+
+  const handleStateChange = (newState) => {
+    setFormData((prev) => ({
+      ...prev,
+      plateSegments: { ...prev.plateSegments, state: newState },
+    }));
+  };
+
+  const updateSegment = (segment, value) => {
+    const cleaned = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    let maxLength = 2;
+    if (segment === 'number') maxLength = 4;
+    setFormData((prev) => ({
+      ...prev,
+      plateSegments: { ...prev.plateSegments, [segment]: cleaned.slice(0, maxLength) },
+    }));
+  };
+
+  const getPlateString = () => {
+    const { state, district, series, number } = formData.plateSegments;
+    return `${state} ${district} ${series} ${number}`.trim();
+  };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [registeredResult, setRegisteredResult] = useState(null);
@@ -54,7 +60,8 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.plate.trim()) {
+    const plate = getPlateString();
+    if (!plate.trim()) {
       setErrorMsg('Please enter your license plate number.');
       return;
     }
@@ -67,7 +74,7 @@ export default function Register() {
     setIsSubmitting(true);
 
     try {
-      const res = await registerVehicle(formData);
+      const res = await registerVehicle({ ...formData, plate });
       if (res && res.success) {
         setRegisteredResult(res.vehicle);
       } else {
@@ -324,19 +331,49 @@ export default function Register() {
                           >
                             License Plate Number *
                           </label>
-                          <input
-                            id="plate"
-                            name="plate"
-                            type="text"
-                            required
-                            maxLength={18}
-                            value={formData.plate}
-                            onChange={(e) =>
-                              setFormData({ ...formData, plate: formatPlate(e.target.value) })
-                            }
-                            placeholder="e.g., KA 03 MX 4020"
-                            className="w-full h-14 px-4 rounded-xl bg-surface-bright font-code-plate text-[22px] tracking-widest text-on-surface uppercase shadow-[3px_3px_0px_#111827] focus:outline-none focus:bg-surface-container-low transition-colors"
-                          />
+                          <div className="flex items-center gap-2">
+                            <input
+                              id="plate-state"
+                              type="text"
+                              maxLength={2}
+                              value={formData.plateSegments.state}
+                              readOnly
+                              className="w-14 h-12 text-center bg-surface-container font-code-plate text-[22px] tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none"
+                            />
+                            <span className="text-on-surface-variant text-xl font-bold"> </span>
+                            <input
+                              id="plate-district"
+                              type="text"
+                              maxLength={2}
+                              required
+                              value={formData.plateSegments.district}
+                              onChange={(e) => updateSegment('district', e.target.value)}
+                              placeholder="01"
+                              className="w-14 h-12 text-center bg-surface-bright font-code-plate text-[22px] tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none focus:bg-surface-container-low transition-colors"
+                            />
+                            <span className="text-on-surface-variant text-xl font-bold"> </span>
+                            <input
+                              id="plate-series"
+                              type="text"
+                              maxLength={2}
+                              required
+                              value={formData.plateSegments.series}
+                              onChange={(e) => updateSegment('series', e.target.value)}
+                              placeholder="AB"
+                              className="w-14 h-12 text-center bg-surface-bright font-code-plate text-[22px] tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none focus:bg-surface-container-low transition-colors"
+                            />
+                            <span className="text-on-surface-variant text-xl font-bold"> </span>
+                            <input
+                              id="plate-number"
+                              type="text"
+                              maxLength={4}
+                              required
+                              value={formData.plateSegments.number}
+                              onChange={(e) => updateSegment('number', e.target.value)}
+                              placeholder="1234"
+                              className="w-24 h-12 text-center bg-surface-bright font-code-plate text-[22px] tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none focus:bg-surface-container-low transition-colors"
+                            />
+                          </div>
                         </div>
                       </div>
 
@@ -517,14 +554,14 @@ export default function Register() {
                             </span>
                           </div>
                           <span className="font-label-md text-label-md text-on-surface-variant uppercase">
-                            {formData.state}
+                            {formData.plateSegments.state}
                           </span>
                         </div>
 
                         {/* License Plate Display */}
                         <div className="p-3 bg-surface-container-lowest rounded-xl shadow-[3px_3px_0px_#111827] text-center">
                           <span className="font-code-plate text-[26px] tracking-widest text-on-surface uppercase font-bold">
-                            {formData.plate || 'ENTER PLATE'}
+                            {getPlateString() || 'ENTER PLATE'}
                           </span>
                         </div>
 
