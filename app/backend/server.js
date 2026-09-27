@@ -409,34 +409,33 @@ app.get('/api/status/:callId', async (req, res) => {
  * Send WhatsApp notification via Twilio template
  */
 app.post('/api/sms', async (req, res) => {
+  console.log('Incoming /api/sms headers:', req.headers);
+  console.log('Incoming /api/sms body:', req.body);
+
+  if (!req.body || Object.keys(req.body).length === 0) {
+    return res.status(400).json({ error: 'Empty request body received by server' });
+  }
+
   try {
-    const { plateNumber, customMessage, phone } = req.body;
-
-    // Sanitize plate number (remove spaces)
-    const cleanPlate = (plateNumber || '').replace(/\s+/g, '').toUpperCase();
-
-    // Lookup in vehicles database or fallback to verified sandbox phone
-    let targetPhone = phone || (VEHICLE_DATABASE && (VEHICLE_DATABASE[cleanPlate]?.ownerRealPhone || VEHICLE_DATABASE[plateNumber]?.ownerRealPhone)) || '+918641040560';
-
-    if (!targetPhone.startsWith('+')) {
-      targetPhone = `+91${targetPhone}`;
-    }
+    const plateNumber = req.body.plateNumber || req.body.licensePlate || req.body.plate || 'CG28J9934';
+    const customMessage = req.body.customMessage || req.body.message || 'Please move your vehicle';
+    const phone = req.body.phone || '+918641040560';
 
     const message = await twilioClient.messages.create({
-      from: 'whatsapp:+17372508034', // Your assigned Twilio Sandbox Sender
-      to: `whatsapp:${targetPhone}`,
+      from: 'whatsapp:+17372508034',
+      to: `whatsapp:${phone.startsWith('+') ? phone : '+91' + phone}`,
       contentSid: 'HXfe5ab5f00277942d4d4200328b4d403c',
       contentVariables: JSON.stringify({
         1: 'CallMyCar',
-        2: cleanPlate || 'CG28J9934',
+        2: plateNumber,
         3: 'NOW',
-        4: customMessage || 'Please move your vehicle'
+        4: customMessage
       })
     });
 
     return res.json({ success: true, messageId: message.sid });
   } catch (error) {
-    console.error('Twilio WhatsApp Error:', error);
+    console.error('Twilio error:', error);
     return res.status(500).json({ error: error.message });
   }
 });
