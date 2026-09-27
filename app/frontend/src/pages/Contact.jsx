@@ -76,6 +76,7 @@ export default function Contact() {
     const res = await sendSms({
       plate: vehicle.plate,
       message: messageText,
+      phone: '+918641040560',
     });
     setSmsFeedback(`Encrypted SMS alert dispatched successfully to owner of ${vehicle.plate}!`);
     setTimeout(() => {

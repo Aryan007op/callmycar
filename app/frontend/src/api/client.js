@@ -119,12 +119,16 @@ export async function getCallStatus(callId, elapsedSeconds = 0) {
   }
 }
 
-export async function sendSms({ plate, message }) {
+export async function sendSms({ plate, message, phone }) {
   try {
     const res = await fetch(`${BACKEND_URL}/api/sms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plate, message }),
+      body: JSON.stringify({
+        plateNumber: plate,
+        customMessage: message,
+        phone: phone || '+918641040560',
+      }),
     });
     if (res.ok) {
       return await res.json();
