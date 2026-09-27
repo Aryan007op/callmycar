@@ -538,21 +538,45 @@ export default function Contact() {
 
                   </div>
 
-                  {/* Bottom Action Button */}
-                  <div className="pt-8">
-                    <button
-                      id="send-sms-alert-btn"
-                      type="button"
-                      onClick={handleSendSms}
-                      className="w-full py-4 px-6 rounded-full bg-tertiary text-on-tertiary font-headline-md text-headline-md flex items-center justify-center gap-3 shadow-[4px_4px_0px_#111827] hover:bg-on-tertiary-container transition-transform active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-[24px]">send</span>
-                      <span>Compose & Send Alert</span>
-                    </button>
-                    <p className="font-body-sm text-body-sm text-center text-on-surface-variant mt-2.5">
-                      Delivered within seconds via Push + SMS Gateway
-                    </p>
-                  </div>
+{/* Bottom Action Button */}
+                    <div className="pt-8 space-y-4">
+                      <button
+                        id="send-sms-alert-btn"
+                        type="button"
+                        onClick={handleSendSms}
+                        className="w-full py-4 px-6 rounded-full bg-tertiary text-on-tertiary font-headline-md text-headline-md flex items-center justify-center gap-3 shadow-[4px_4px_0px_#111827] hover:bg-on-tertiary-container transition-transform active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[24px]">send</span>
+                        <span>Compose & Send Alert</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const response = await fetch('/api/sms', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              plateNumber: vehicle.plate,
+                              customMessage: 'Test: Your lights are on!',
+                              phone: '+918641040560'
+                            })
+                          });
+                          const data = await response.json();
+                          if (data.success) {
+                            alert('Custom WhatsApp message sent!');
+                          } else {
+                            alert(`Error: ${data.error}`);
+                          }
+                        }}
+                        className="w-full py-3 px-6 rounded-full bg-surface-container-highest text-on-surface font-label-md text-label-md flex items-center justify-center gap-2 shadow-[2px_2px_0px_#111827] hover:bg-surface-variant transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">bug_report</span>
+                        <span>TEMP: Send Test WhatsApp</span>
+                      </button>
+                      <p className="font-body-sm text-body-sm text-center text-on-surface-variant mt-2.5">
+                        Delivered within seconds via Push + SMS Gateway
+                      </p>
+                    </div>
                 </div>
               </div>
 
