@@ -406,51 +406,35 @@ app.get('/api/status/:callId', async (req, res) => {
 
 /**
  * POST /api/sms
- * Send WhatsApp notification via Twilio Sandbox template
+ * Send WhatsApp notification via Twilio template
  */
 app.post('/api/sms', async (req, res) => {
   try {
     const { plateNumber, customMessage, phone } = req.body;
 
-    // 1. Resolve phone number (from body or vehicles database)
-    let targetPhone = phone;
-    if (!targetPhone && plateNumber) {
-      const cleanPlate = normalizePlate(plateNumber);
-      const vehicle = VEHICLE_DATABASE[cleanPlate];
-      targetPhone = vehicle?.ownerRealPhone;
+    // Fallback to verified demo phone number if not found in vehicles.json
+    let targetPhone = phone || (VEHICLE_DATABASE && VEHICLE_DATABASE[plateNumber]?.ownerRealPhone) || '+918641040560';
+
+    if (!targetPhone.startsWith('+')) {
+      targetPhone = `+91${targetPhone}`;
     }
 
-    if (!targetPhone) {
-      return res.status(400).json({ error: 'Phone number required' });
-    }
-
-    // 2. Ensure international +91 format
-    let formattedPhone = targetPhone.trim();
-    if (!formattedPhone.startsWith('+')) {
-      formattedPhone = `+91${formattedPhone}`;
-    }
-
-    // 3. Send WhatsApp message via Twilio Sandbox Template
-    const twilioMsg = await twilioClient.messages.create({
-      from: 'whatsapp:+14155238886', // Standard Twilio Sandbox Sender
-      to: `whatsapp:${formattedPhone}`,
-      contentSid: 'HXfe5ab5f00277942d4d4200328b4d403c', // Sandbox Template SID
+    const message = await twilioClient.messages.create({
+      from: 'whatsapp:+17372508034', // Your verified Sandbox sender
+      to: `whatsapp:${targetPhone}`,
+      contentSid: 'HXfe5ab5f00277942d4d4200328b4d403c',
       contentVariables: JSON.stringify({
         1: 'CallMyCar',
-        2: plateNumber || 'DL 01 AB 1234',
+        2: plateNumber || 'DL01AB1234',
         3: 'NOW',
         4: customMessage || 'Please move your vehicle'
       })
     });
 
-    console.log('WhatsApp sent successfully:', twilioMsg.sid);
-    return res.json({ success: true, messageId: twilioMsg.sid });
+    return res.json({ success: true, messageId: message.sid });
   } catch (error) {
-    console.error('Twilio Error in /api/sms:', error);
-    return res.status(500).json({ 
-      error: error.message || 'Failed to send WhatsApp message',
-      details: error 
-    });
+    console.error('Twilio Error:', error);
+    return res.status(500).json({ error: error.message });
   }
 });
 
