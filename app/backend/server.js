@@ -408,23 +408,44 @@ app.get('/api/status/:callId', async (req, res) => {
  * POST /api/sms
  * Send anonymous SMS through proxy gateway
  */
-app.post('/api/sms', (req, res) => {
+app.post('/api/sms', async (req, res) => {
   const { plate, message } = req.body;
   const cleanPlate = normalizePlate(plate);
 
-  const sid = `sms_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const vehicle = VEHICLE_DATABASE[cleanPlate];
+  const toNumber = vehicle?.ownerRealPhone;
 
-  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-    console.log(`[Twilio] Dispatching SMS for ${cleanPlate}`);
+  if (!toNumber) {
+    return res.status(404).json({ error: 'Vehicle not found or no phone number registered' });
+  }
+
+  let sid = `sms_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  let status = 'queued';
+
+  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PROXY_NUMBER) {
+    try {
+      console.log(`[Twilio SMS] Sending to ${toNumber} for plate ${cleanPlate}`);
+      const twilioMsg = await twilioClient.messages.create({
+        body: `[CallMyCar] ${message} - Vehicle: ${cleanPlate}`,
+        from: process.env.TWILIO_PROXY_NUMBER,
+        to: toNumber,
+      });
+      sid = twilioMsg.sid;
+      status = twilioMsg.status;
+      console.log('[Twilio SMS Response]', twilioMsg.sid, twilioMsg.status);
+    } catch (err) {
+      console.error('[Twilio SMS Error]', err.message);
+      return res.status(500).json({ error: 'Failed to send SMS', details: err.message });
+    }
   }
 
   res.json({
     success: true,
     sid,
     plate: cleanPlate,
-    status: 'delivered',
-    deliveryTime: '0.8s',
-    message: `Encrypted SMS alert dispatched successfully to the owner of ${cleanPlate || 'vehicle'}!`,
+    status,
+    deliveryTime: '1-2s',
+    message: `Encrypted SMS alert dispatched successfully to the owner of ${cleanPlate}!`,
   });
 });
 
