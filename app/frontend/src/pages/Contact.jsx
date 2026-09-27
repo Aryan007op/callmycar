@@ -216,6 +216,51 @@ export default function Contact() {
                 </div>
               </div>
 
+              {/* TEMP: Vehicle Debug Panel */}
+              <div className="w-full bg-error-container/10 border-2 border-error rounded-xl p-6 mb-8 shadow-[4px_4px_0px_#111827]">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-headline-md text-headline-md text-on-error-container flex items-center gap-2">
+                    <span className="material-symbols-outlined">bug_report</span>
+                    TEMP: Vehicle Debug Info
+                  </h3>
+                  <span className="px-3 py-1 bg-error text-on-error rounded-full font-label-sm text-label-sm">REMOVE BEFORE PRODUCTION</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm font-mono">
+                  <div className="bg-surface-container-lowest p-3 rounded-lg">
+                    <span className="text-on-surface-variant">plate:</span>
+                    <span className="text-on-error-container ml-2">{vehicle.plate}</span>
+                  </div>
+                  <div className="bg-surface-container-lowest p-3 rounded-lg">
+                    <span className="text-on-surface-variant">displayName:</span>
+                    <span className="text-on-error-container ml-2">{vehicle.displayName}</span>
+                  </div>
+                  <div className="bg-surface-container-lowest p-3 rounded-lg">
+                    <span className="text-on-surface-variant">shieldStatus:</span>
+                    <span className="text-on-error-container ml-2">{vehicle.shieldStatus}</span>
+                  </div>
+                  <div className="bg-surface-container-lowest p-3 rounded-lg">
+                    <span className="text-on-surface-variant">responseEstimate:</span>
+                    <span className="text-on-error-container ml-2">{vehicle.responseEstimate}</span>
+                  </div>
+                  <div className="bg-surface-container-lowest p-3 rounded-lg">
+                    <span className="text-on-surface-variant">ownerMaskedPhone:</span>
+                    <span className="text-on-error-container ml-2">{vehicle.ownerMaskedPhone}</span>
+                  </div>
+                  <div className="bg-surface-container-lowest p-3 rounded-lg">
+                    <span className="text-on-surface-variant">registered:</span>
+                    <span className="text-on-error-container ml-2">{vehicle.registered ? 'true' : 'false'}</span>
+                  </div>
+                  <div className="bg-surface-container-lowest p-3 rounded-lg">
+                    <span className="text-on-surface-variant">verified:</span>
+                    <span className="text-on-error-container ml-2">{vehicle.verified ? 'true' : 'false'}</span>
+                  </div>
+                  <div className="bg-surface-container-lowest p-3 rounded-lg col-span-2">
+                    <span className="text-on-surface-variant">Full object:</span>
+                    <pre className="text-on-error-container mt-1 whitespace-pre-wrap text-xs overflow-auto max-h-40">{JSON.stringify(vehicle, null, 2)}</pre>
+                  </div>
+                </div>
+              </div>
+
               {/* Main Headline + Editorial Direction */}
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div className="max-w-2xl space-y-3">
