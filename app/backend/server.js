@@ -1,11 +1,15 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import twilio from 'twilio';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Initialize Twilio client
+const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
 app.use(cors());
 app.use(express.json());
@@ -284,8 +288,28 @@ app.post('/api/call', async (req, res) => {
     }
   }
 
+  // Twilio voice call fallback (for international numbers)
+  let callInitiated = session.vapiCallId ? true : false;
+  if (!callInitiated && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PROXY_NUMBER) {
+    try {
+      console.log(`[Twilio] Dispatching voice call for ${vehicle.plate} to ${vehicle.ownerRealPhone}`);
+      const twilioCall = await twilioClient.calls.create({
+        to: vehicle.ownerRealPhone,
+        from: process.env.TWILIO_PROXY_NUMBER,
+        twiml: `<Response><Say voice="alice">Hello, this is CallMyCar calling regarding your vehicle ${vehicle.plate}. ${issue}. Please attend to your vehicle when free. Thank you.</Say></Response>`,
+      });
+      console.log('[Twilio Call Response]', twilioCall.sid);
+      session.twilioCallSid = twilioCall.sid;
+      session.status = 'ringing';
+      activeCalls.set(twilioCall.sid, session);
+      callInitiated = true;
+    } catch (err) {
+      console.error('[Twilio Error]', err.message);
+    }
+  }
+
   // Bland.ai dispatch fallback
-  if (process.env.BLAND_AI_API_KEY && process.env.BLAND_AI_PHONE_NUMBER) {
+  if (!callInitiated && process.env.BLAND_AI_API_KEY && process.env.BLAND_AI_PHONE_NUMBER) {
     try {
       console.log(`[Bland.ai] Dispatching voice agent call for ${vehicle.plate}`);
     } catch (err) {
@@ -295,7 +319,7 @@ app.post('/api/call', async (req, res) => {
 
   res.json({
     success: true,
-    callId,
+    callId: session.twilioCallSid || session.vapiCallId || callId,
     status: 'ringing',
     message: `AI Voice Assistant is dialing the registered driver of ${vehicle.plate}.`,
     session,
@@ -310,28 +334,46 @@ app.get('/api/status/:callId', async (req, res) => {
   const { callId } = req.params;
   const session = activeCalls.get(callId);
 
-  // If not found locally, check if it's a Vapi call ID
-  if (!session) {
-    if (process.env.VAPI_API_KEY) {
-      try {
-        const vapiRes = await fetch(`https://api.vapi.ai/call/${callId}`, {
-          headers: { 'Authorization': `Bearer ${process.env.VAPI_API_KEY}` },
+  // If not found locally, check Vapi
+  if (!session && process.env.VAPI_API_KEY) {
+    try {
+      const vapiRes = await fetch(`https://api.vapi.ai/call/${callId}`, {
+        headers: { 'Authorization': `Bearer ${process.env.VAPI_API_KEY}` },
+      });
+      if (vapiRes.ok) {
+        const vapiData = await vapiRes.json();
+        return res.json({
+          success: true,
+          callId,
+          status: vapiData.status || 'unknown',
+          step: vapiData.status === 'ended' ? 4 : 2,
+          message: `Vapi call status: ${vapiData.status}`,
+          vapiData,
         });
-        if (vapiRes.ok) {
-          const vapiData = await vapiRes.json();
-          return res.json({
-            success: true,
-            callId,
-            status: vapiData.status || 'unknown',
-            step: vapiData.status === 'ended' ? 4 : 2,
-            message: `Vapi call status: ${vapiData.status}`,
-            vapiData,
-          });
-        }
-      } catch (err) {
-        console.error('[Vapi status fetch error]', err.message);
       }
+    } catch (err) {
+      console.error('[Vapi status fetch error]', err.message);
     }
+  }
+
+  // If not found, check Twilio
+  if (!session && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+    try {
+      const twilioCall = await twilioClient.calls(callId).fetch();
+      return res.json({
+        success: true,
+        callId,
+        status: twilioCall.status,
+        step: twilioCall.status === 'completed' ? 4 : 2,
+        message: `Twilio call status: ${twilioCall.status}`,
+        twilioData: twilioCall,
+      });
+    } catch (err) {
+      console.error('[Twilio status fetch error]', err.message);
+    }
+  }
+
+  if (!session) {
     return res.status(404).json({ error: 'Call session not found' });
   }
 
