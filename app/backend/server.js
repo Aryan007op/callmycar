@@ -406,7 +406,7 @@ app.get('/api/status/:callId', async (req, res) => {
 
 /**
  * POST /api/sms
- * Send anonymous SMS through proxy gateway
+ * Send WhatsApp notification via Twilio Sandbox (uses pre-approved template)
  */
 app.post('/api/sms', async (req, res) => {
   const { plate, message } = req.body;
@@ -419,34 +419,43 @@ app.post('/api/sms', async (req, res) => {
     return res.status(404).json({ error: 'Vehicle not found or no phone number registered' });
   }
 
-  let sid = `sms_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  let status = 'queued';
+  // Format for WhatsApp: whatsapp:+91xxxxxxxxxx
+  const whatsappTo = toNumber.startsWith('whatsapp:') ? toNumber : `whatsapp:${toNumber}`;
+  const whatsappFrom = 'whatsapp:+14155238886'; // Twilio WhatsApp Sandbox number
 
-  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PROXY_NUMBER) {
-    try {
-      console.log(`[Twilio SMS] Sending to ${toNumber} for plate ${cleanPlate}`);
-      const twilioMsg = await twilioClient.messages.create({
-        body: `[CallMyCar] ${message} - Vehicle: ${cleanPlate}`,
-        from: process.env.TWILIO_PROXY_NUMBER,
-        to: toNumber,
-      });
-      sid = twilioMsg.sid;
-      status = twilioMsg.status;
-      console.log('[Twilio SMS Response]', twilioMsg.sid, twilioMsg.status);
-    } catch (err) {
-      console.error('[Twilio SMS Error]', err.message);
-      return res.status(500).json({ error: 'Failed to send SMS', details: err.message });
-    }
+  try {
+    console.log(`[Twilio WhatsApp] Sending to ${whatsappTo} for plate ${cleanPlate}`);
+    
+    // Use Twilio Sandbox pre-approved template
+    // Template: "Your {{1}} order of {{2}} has shipped and should be delivered on {{3}}. Details: {{4}}"
+    // Content SID for Twilio Sandbox template (may need to verify in your Twilio Console)
+    const SANDBOX_TEMPLATE_SID = 'HXb5b62575e6e4ff6129ad7c8efe1f983e';
+    
+    const twilioMsg = await twilioClient.messages.create({
+      contentSid: SANDBOX_TEMPLATE_SID,
+      from: whatsappFrom,
+      to: whatsappTo,
+      contentVariables: JSON.stringify({
+        '1': 'CallMyCar',
+        '2': cleanPlate,
+        '3': 'NOW',
+        '4': message || 'Please move your vehicle'
+      }),
+    });
+    console.log('[Twilio WhatsApp Response]', twilioMsg.sid, twilioMsg.status);
+
+    return res.json({
+      success: true,
+      messageId: twilioMsg.sid,
+      plate: cleanPlate,
+      status: twilioMsg.status,
+      deliveryTime: '1-2s',
+      message: `WhatsApp alert dispatched successfully to the owner of ${cleanPlate}!`,
+    });
+  } catch (err) {
+    console.error('[Twilio WhatsApp Error]', err.message);
+    return res.status(500).json({ error: 'Failed to send WhatsApp', details: err.message });
   }
-
-  res.json({
-    success: true,
-    sid,
-    plate: cleanPlate,
-    status,
-    deliveryTime: '1-2s',
-    message: `Encrypted SMS alert dispatched successfully to the owner of ${cleanPlate}!`,
-  });
 });
 
 // Vercel serverless export
