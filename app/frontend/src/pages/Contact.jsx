@@ -519,6 +519,23 @@ export default function Contact() {
                         {smsFeedback}
                       </div>
                     )}
+
+                    {/* TEMP: Target Phone Display */}
+                    <div className="mb-4 p-4 bg-warning-container/20 border-2 border-warning rounded-xl shadow-[3px_3px_0px_#111827]">
+                      <div className="flex items-center gap-2 text-warning">
+                        <span className="material-symbols-outlined">phone_in_talk</span>
+                        <span className="font-label-md text-label-md uppercase tracking-wider">
+                          TEMP: Target Number for Call & SMS
+                        </span>
+                      </div>
+                      <div className="mt-2 font-code-plate text-[20px] text-on-surface bg-surface-container-lowest px-4 py-2 rounded-lg shadow-[2px_2px_0px_#111827] inline-block">
+                        {vehicle.ownerMaskedPhone || '+91 •••• ••••••'}
+                      </div>
+                      <div className="mt-1 text-xs text-on-surface-variant">
+                        WhatsApp & Voice calls will go to this number
+                      </div>
+                    </div>
+
                   </div>
 
                   {/* Bottom Action Button */}
