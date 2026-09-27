@@ -417,25 +417,33 @@ app.post('/api/sms', async (req, res) => {
   }
 
   try {
-    const plateNumber = req.body.plateNumber || req.body.licensePlate || req.body.plate || 'CG28J9934';
-    const customMessage = req.body.customMessage || req.body.message || 'Please move your vehicle';
-    const phone = req.body.phone || '+918641040560';
+    const { plateNumber, customMessage, phone } = req.body;
 
+    // 1. Target phone number (defaults to verified demo number)
+    let targetPhone = phone || '+918641040560';
+    if (!targetPhone.startsWith('+')) {
+      targetPhone = `+91${targetPhone}`;
+    }
+
+    // 2. Custom message fallback
+    const userMessage = customMessage || 'Please move your vehicle immediately, it is blocking the driveway.';
+
+    // 3. Send WhatsApp via Twilio Sandbox Template
     const message = await twilioClient.messages.create({
-      from: 'whatsapp:+17372508034',
-      to: `whatsapp:${phone.startsWith('+') ? phone : '+91' + phone}`,
+      from: 'whatsapp:+17372508034', // Your assigned Sandbox Sender
+      to: `whatsapp:${targetPhone}`,
       contentSid: 'HXfe5ab5f00277942d4d4200328b4d403c',
       contentVariables: JSON.stringify({
-        1: 'CallMyCar',
-        2: plateNumber,
+        1: 'CallMyCar Alert',
+        2: plateNumber || 'Vehicle',
         3: 'NOW',
-        4: customMessage
+        4: userMessage // <--- Your custom message goes here!
       })
     });
 
     return res.json({ success: true, messageId: message.sid });
   } catch (error) {
-    console.error('Twilio error:', error);
+    console.error('WhatsApp Error:', error);
     return res.status(500).json({ error: error.message });
   }
 });
