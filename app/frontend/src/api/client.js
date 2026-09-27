@@ -121,11 +121,14 @@ export async function getCallStatus(callId, elapsedSeconds = 0) {
 
 export async function sendSms({ plate, message, phone }) {
   try {
+    // Sanitize plate number (remove spaces, special chars)
+    const cleanPlate = (plate || '').replace(/\s+/g, '').toUpperCase();
+    
     const res = await fetch(`${BACKEND_URL}/api/sms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        plateNumber: plate,
+        plateNumber: cleanPlate,
         customMessage: message,
         phone: phone || '+918641040560',
       }),

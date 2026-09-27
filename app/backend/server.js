@@ -412,20 +412,23 @@ app.post('/api/sms', async (req, res) => {
   try {
     const { plateNumber, customMessage, phone } = req.body;
 
-    // Fallback to verified demo phone number if not found in vehicles.json
-    let targetPhone = phone || (VEHICLE_DATABASE && VEHICLE_DATABASE[plateNumber]?.ownerRealPhone) || '+918641040560';
+    // Sanitize plate number (remove spaces)
+    const cleanPlate = (plateNumber || '').replace(/\s+/g, '').toUpperCase();
+
+    // Lookup in vehicles database or fallback to verified sandbox phone
+    let targetPhone = phone || (VEHICLE_DATABASE && (VEHICLE_DATABASE[cleanPlate]?.ownerRealPhone || VEHICLE_DATABASE[plateNumber]?.ownerRealPhone)) || '+918641040560';
 
     if (!targetPhone.startsWith('+')) {
       targetPhone = `+91${targetPhone}`;
     }
 
     const message = await twilioClient.messages.create({
-      from: 'whatsapp:+17372508034', // Your verified Sandbox sender
+      from: 'whatsapp:+17372508034', // Your assigned Twilio Sandbox Sender
       to: `whatsapp:${targetPhone}`,
       contentSid: 'HXfe5ab5f00277942d4d4200328b4d403c',
       contentVariables: JSON.stringify({
         1: 'CallMyCar',
-        2: plateNumber || 'DL01AB1234',
+        2: cleanPlate || 'CG28J9934',
         3: 'NOW',
         4: customMessage || 'Please move your vehicle'
       })
@@ -433,7 +436,7 @@ app.post('/api/sms', async (req, res) => {
 
     return res.json({ success: true, messageId: message.sid });
   } catch (error) {
-    console.error('Twilio Error:', error);
+    console.error('Twilio WhatsApp Error:', error);
     return res.status(500).json({ error: error.message });
   }
 });
