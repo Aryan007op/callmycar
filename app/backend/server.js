@@ -417,33 +417,30 @@ app.post('/api/sms', async (req, res) => {
   }
 
   try {
-    const { plateNumber, customMessage, phone } = req.body;
-
-    // 1. Resolve target phone number
-    let targetPhone = phone || (VEHICLE_DATABASE && VEHICLE_DATABASE[plateNumber]?.ownerRealPhone) || '+918641040560';
+    const body = req.body || {};
+    const plateNumber = body.plateNumber || body.licensePlate || 'CG28J9934';
+    const customMessage = body.customMessage || body.message || 'Please move your vehicle!';
+    let targetPhone = body.phone || '+918641040560';
     targetPhone = targetPhone.trim();
     if (!targetPhone.startsWith('+')) {
       targetPhone = `+91${targetPhone}`;
     }
-
-    // 2. Format custom message text
-    const cleanPlate = (plateNumber || 'VEHICLE').replace(/\s+/g, '').toUpperCase();
-    const alertText = customMessage || 'Please move your vehicle immediately.';
-    const fullBody = `🚨 *CallMyCar Alert*\n\nVehicle: ${cleanPlate}\nMessage: ${alertText}`;
-
-    // 3. Send direct free-form WhatsApp message
+    const cleanPlate = plateNumber.replace(/\s+/g, '').toUpperCase();
+    const fullBody = `🚨 *CallMyCar Alert*\n\nVehicle: ${cleanPlate}\nMessage: ${customMessage}`;
+    // Send WhatsApp message
     const message = await twilioClient.messages.create({
-      from: 'whatsapp:+17372508034', // Sandbox sender
+      from: 'whatsapp:+17372508034',
       to: `whatsapp:${targetPhone}`,
       body: fullBody
     });
-
-    console.log('WhatsApp sent successfully:', message.sid);
-    return res.json({ success: true, messageId: message.sid });
+    console.log('Successfully sent WhatsApp:', message.sid);
+    return res.status(200).json({ success: true, messageId: message.sid });
   } catch (error) {
-    console.error('Twilio WhatsApp Direct Error:', error);
-    return res.status(500).json({
-      error: error.message || 'Failed to send WhatsApp message'
+    console.error('Twilio Error:', error.message);
+    // Return details in JSON instead of crashing with 500
+    return res.status(200).json({
+      success: false,
+      error: error.message || 'Twilio failed to send'
     });
   }
 });
