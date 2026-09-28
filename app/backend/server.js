@@ -406,7 +406,7 @@ app.get('/api/status/:callId', async (req, res) => {
 
 /**
  * POST /api/sms
- * Send WhatsApp notification via Twilio template
+ * Send free-form WhatsApp message (24-Hour Active Window mode)
  */
 app.post('/api/sms', async (req, res) => {
   console.log('Incoming /api/sms headers:', req.headers);
@@ -419,32 +419,32 @@ app.post('/api/sms', async (req, res) => {
   try {
     const { plateNumber, customMessage, phone } = req.body;
 
-    // 1. Target phone number (defaults to verified demo number)
-    let targetPhone = phone || '+918641040560';
+    // 1. Resolve target phone number
+    let targetPhone = phone || (VEHICLE_DATABASE && VEHICLE_DATABASE[plateNumber]?.ownerRealPhone) || '+918641040560';
+    targetPhone = targetPhone.trim();
     if (!targetPhone.startsWith('+')) {
       targetPhone = `+91${targetPhone}`;
     }
 
-    // 2. Custom message fallback
-    const userMessage = customMessage || 'Please move your vehicle immediately, it is blocking the driveway.';
+    // 2. Format custom message text
+    const cleanPlate = (plateNumber || 'VEHICLE').replace(/\s+/g, '').toUpperCase();
+    const alertText = customMessage || 'Please move your vehicle immediately.';
+    const fullBody = `🚨 *CallMyCar Alert*\n\nVehicle: ${cleanPlate}\nMessage: ${alertText}`;
 
-    // 3. Send WhatsApp via Twilio Sandbox Template
+    // 3. Send direct free-form WhatsApp message
     const message = await twilioClient.messages.create({
-      from: 'whatsapp:+17372508034', // Your assigned Sandbox Sender
+      from: 'whatsapp:+17372508034', // Sandbox sender
       to: `whatsapp:${targetPhone}`,
-      contentSid: 'HXfe5ab5f00277942d4d4200328b4d403c',
-      contentVariables: JSON.stringify({
-        1: 'CallMyCar Alert',
-        2: plateNumber || 'Vehicle',
-        3: 'NOW',
-        4: userMessage // <--- Your custom message goes here!
-      })
+      body: fullBody
     });
 
+    console.log('WhatsApp sent successfully:', message.sid);
     return res.json({ success: true, messageId: message.sid });
   } catch (error) {
-    console.error('WhatsApp Error:', error);
-    return res.status(500).json({ error: error.message });
+    console.error('Twilio WhatsApp Direct Error:', error);
+    return res.status(500).json({
+      error: error.message || 'Failed to send WhatsApp message'
+    });
   }
 });
 
