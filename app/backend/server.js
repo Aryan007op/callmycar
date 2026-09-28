@@ -406,7 +406,7 @@ app.get('/api/status/:callId', async (req, res) => {
 
 /**
  * POST /api/sms
- * Send free-form WhatsApp message (24-Hour Active Window mode)
+ * Send WhatsApp notification via Twilio template (fixes Error 21654)
  */
 app.post('/api/sms', async (req, res) => {
   console.log('Incoming /api/sms headers:', req.headers);
@@ -420,28 +420,33 @@ app.post('/api/sms', async (req, res) => {
     const body = req.body || {};
     const plateNumber = body.plateNumber || body.licensePlate || 'CG28J9934';
     const customMessage = body.customMessage || body.message || 'Please move your vehicle!';
+    
     let targetPhone = body.phone || '+918641040560';
     targetPhone = targetPhone.trim();
     if (!targetPhone.startsWith('+')) {
       targetPhone = `+91${targetPhone}`;
     }
+
     const cleanPlate = plateNumber.replace(/\s+/g, '').toUpperCase();
-    const fullBody = `🚨 *CallMyCar Alert*\n\nVehicle: ${cleanPlate}\nMessage: ${customMessage}`;
-    // Send WhatsApp message
+
+    // Must use contentSid & contentVariables for Twilio WhatsApp (fixes Error 21654)
     const message = await twilioClient.messages.create({
       from: 'whatsapp:+17372508034',
       to: `whatsapp:${targetPhone}`,
-      body: fullBody
+      contentSid: 'HXfe5ab5f00277942d4d4200328b4d403c',
+      contentVariables: JSON.stringify({
+        1: 'CallMyCar',
+        2: cleanPlate,
+        3: 'NOW',
+        4: customMessage
+      })
     });
-    console.log('Successfully sent WhatsApp:', message.sid);
+
+    console.log('WhatsApp sent successfully:', message.sid);
     return res.status(200).json({ success: true, messageId: message.sid });
   } catch (error) {
-    console.error('Twilio Error:', error.message);
-    // Return details in JSON instead of crashing with 500
-    return res.status(200).json({
-      success: false,
-      error: error.message || 'Twilio failed to send'
-    });
+    console.error('Twilio WhatsApp Error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to send WhatsApp message' });
   }
 });
 
