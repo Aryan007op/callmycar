@@ -38,16 +38,12 @@ export default function Header({ currentPath = 'how-it-works' }) {
           >
             How it works
           </Link>
-          <Link
-            to="/contact/DL%2001%20AB%201234"
-            className={`px-4 py-2 rounded-full transition-colors ${
-              isContact
-                ? 'bg-surface-container-high text-on-surface font-title-md'
-                : 'font-title-md text-title-md text-on-surface-variant hover:text-on-surface'
-            }`}
+          <a
+            href="#safety-and-privacy"
+            className="px-4 py-2 rounded-full font-title-md text-title-md text-on-surface-variant hover:text-on-surface transition-colors"
           >
-            Contact Relay
-          </Link>
+            Safety & Privacy
+          </a>
           <Link
             to="/register"
             className={`px-4 py-2 rounded-full transition-colors ${
@@ -58,12 +54,6 @@ export default function Header({ currentPath = 'how-it-works' }) {
           >
             Register Vehicle
           </Link>
-          <a
-            href="#safety-and-privacy"
-            className="px-4 py-2 rounded-full font-title-md text-title-md text-on-surface-variant hover:text-on-surface transition-colors"
-          >
-            Safety & Privacy
-          </a>
           <a
             href="#faqs"
             className="px-4 py-2 rounded-full font-title-md text-title-md text-on-surface-variant hover:text-on-surface transition-colors"
