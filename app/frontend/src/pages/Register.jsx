@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { registerVehicle } from '../api/client';
+import { saveVehicleToFirebase } from '../firebase';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -73,15 +74,26 @@ export default function Register() {
     setErrorMsg('');
     setIsSubmitting(true);
 
+    const cleanPlate = plate.replace(/\s+/g, '').toUpperCase();
+
     try {
+      // Save to Firestore 'vehicles' collection
+      await saveVehicleToFirebase(cleanPlate, {
+        name: formData.ownerName || 'Vehicle Owner',
+        phone: formData.ownerPhone,
+        telegramChatId: formData.telegramChatId || ''
+      });
+
+      // Also call backend API
       const res = await registerVehicle({ ...formData, plate });
       if (res && res.success) {
         setRegisteredResult(res.vehicle);
       } else {
         setErrorMsg(res?.error || 'Registration failed. Please try again.');
       }
-    } catch (err) {
-      setErrorMsg('Could not register vehicle. Please try again.');
+    } catch (error) {
+      console.error('Firebase Error:', error);
+      setErrorMsg('Could not register vehicle: ' + error.message);
     } finally {
       setIsSubmitting(false);
     }
