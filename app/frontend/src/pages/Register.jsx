@@ -60,7 +60,9 @@ export default function Register() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); // Stop page refresh
+    console.log("Submit button clicked! Processing registration...");
+
     const plate = getPlateString();
     if (!plate.trim()) {
       setErrorMsg('Please enter your license plate number.');
@@ -75,25 +77,35 @@ export default function Register() {
     setIsSubmitting(true);
 
     const cleanPlate = plate.replace(/\s+/g, '').toUpperCase();
+    console.log("Processing registration for plate:", cleanPlate);
 
     try {
+      console.log("Attempting to write to Firestore for plate:", cleanPlate);
+
       // Save to Firestore 'vehicles' collection
       await saveVehicleToFirebase(cleanPlate, {
-        name: formData.ownerName || 'Vehicle Owner',
-        phone: formData.ownerPhone,
+        name: formData.ownerName || 'Test Owner',
+        phone: formData.ownerPhone || '+918641040560',
         telegramChatId: formData.telegramChatId || ''
       });
+
+      console.log("Firestore Write Success!");
 
       // Also call backend API
       const res = await registerVehicle({ ...formData, plate });
       if (res && res.success) {
         setRegisteredResult(res.vehicle);
+        console.log("Backend API Success!");
       } else {
         setErrorMsg(res?.error || 'Registration failed. Please try again.');
       }
+      
+      console.log("Registration complete!");
+      alert("Vehicle registered successfully!");
     } catch (error) {
-      console.error('Firebase Error:', error);
+      console.error("Firestore Error:", error);
       setErrorMsg('Could not register vehicle: ' + error.message);
+      alert("Failed to register: " + error.message);
     } finally {
       setIsSubmitting(false);
     }
