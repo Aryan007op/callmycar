@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import twilio from 'twilio';
+import axios from 'axios';
 
 dotenv.config();
 
@@ -449,6 +450,46 @@ app.post('/api/sms', async (req, res) => {
     return res.status(500).json({ error: error.message || 'Failed to send WhatsApp message' });
   }
 });
+
+/**
+ * POST /api/telegram-alert
+ * Send instant custom alert via Telegram Bot API
+ */
+app.post('/api/telegram-alert', async (req, res) => {
+  console.log('Incoming /api/telegram-alert body:', req.body);
+
+  try {
+    const body = req.body || {};
+    const plateNumber = body.plateNumber || body.licensePlate || 'CG28J9934';
+    const customMessage = body.customMessage || body.message || 'Please move your vehicle immediately!';
+    const chatId = body.chatId || process.env.TELEGRAM_CHAT_ID || 'YOUR_CHAT_ID_HERE';
+
+    const cleanPlate = plateNumber.replace(/\s+/g, '').toUpperCase();
+
+    // Format rich custom message with Markdown
+    const messageText = `🚨 *CALLMYCAR VEHICLE ALERT* 🚨\n\n🚗 *Vehicle:* \`${cleanPlate}\`\n💬 *Message:* ${customMessage}\n\n⏰ *Time:* ${new Date().toLocaleTimeString()}`;
+
+    const botToken = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN_HERE';
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+
+    const response = await axios.post(url, {
+      chat_id: chatId,
+      text: messageText,
+      parse_mode: 'Markdown'
+    });
+
+    console.log('Telegram Alert Sent:', response.data.ok);
+    return res.status(200).json({ success: true, result: response.data });
+  } catch (error) {
+    console.error('Telegram API Error:', error.response?.data || error.message);
+    return res.status(500).json({
+      success: false,
+      error: error.response?.data?.description || error.message
+    });
+  }
+});
+
+export default app;
 
 // Vercel serverless export
 export default app;
