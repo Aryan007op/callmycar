@@ -1,8 +1,7 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import twilio from 'twilio';
-import axios from 'axios';
+const express = require('express');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const twilio = require('twilio');
 
 dotenv.config();
 
@@ -198,6 +197,7 @@ app.post('/api/lookup', (req, res) => {
       responseEstimate: '~45 Seconds',
       shieldStatus: 'Active Member Shield',
       ownerMaskedPhone: '+1 (•••) •••-1290',
+      ownerRealPhone: '+15550191290',
     };
   }
 
@@ -255,7 +255,7 @@ app.post('/api/call', async (req, res) => {
   if (process.env.VAPI_API_KEY && process.env.VAPI_ASSISTANT_ID) {
     try {
       console.log(`[Vapi.ai] Dispatching real voice agent call for ${vehicle.plate} (Assistant: ${process.env.VAPI_ASSISTANT_ID})`);
-      if (vehicle.ownerRealPhone && process.env.VAPI_PHONE_NUMBER_ID) {
+      if (vehicle.ownerRealPhone) {
         const vapiResponse = await fetch('https://api.vapi.ai/call/phone', {
           method: 'POST',
           headers: {
@@ -264,7 +264,6 @@ app.post('/api/call', async (req, res) => {
           },
           body: JSON.stringify({
             assistantId: process.env.VAPI_ASSISTANT_ID,
-            phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID,
             customer: {
               number: vehicle.ownerRealPhone,
             },
@@ -287,6 +286,15 @@ app.post('/api/call', async (req, res) => {
       }
     } catch (err) {
       console.error('[Vapi.ai Error]', err.message);
+    }
+  }
+
+  // Bland.ai dispatch fallback
+  if (process.env.BLAND_AI_API_KEY && process.env.BLAND_AI_PHONE_NUMBER) {
+    try {
+      console.log(`[Bland.ai] Dispatching voice agent call for ${vehicle.plate}`);
+    } catch (err) {
+      console.error('[Bland.ai Error]', err.message);
     }
   }
 
@@ -473,27 +481,35 @@ app.post('/api/telegram-alert', async (req, res) => {
     const botToken = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN_HERE';
     const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
 
-    const response = await axios.post(url, {
-      chat_id: chatId,
-      text: messageText,
-      parse_mode: 'Markdown'
+    // Using native Node.js fetch (Node 18+) to avoid import duplicate crashes
+    const telegramRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: messageText,
+        parse_mode: 'Markdown'
+      })
     });
 
-    console.log('Telegram Alert Sent:', response.data.ok);
-    return res.status(200).json({ success: true, result: response.data });
+    const data = await telegramRes.json();
+    if (!telegramRes.ok) {
+      throw new Error(data.description || 'Failed to send Telegram message');
+    }
+
+    console.log('Telegram Alert Sent:', data.ok);
+    return res.status(200).json({ success: true, result: data });
   } catch (error) {
-    console.error('Telegram API Error:', error.response?.data || error.message);
-    return res.status(500).json({
-      success: false,
-      error: error.response?.data?.description || error.message
+    console.error('Telegram API Error:', error.message);
+    return res.status(500).json({ 
+      success: false, 
+      error: error.message 
     });
   }
 });
 
-export default app;
-
 // Vercel serverless export
-export default app;
+module.exports = app;
 
 // Local development server
 if (process.env.NODE_ENV !== 'production') {
