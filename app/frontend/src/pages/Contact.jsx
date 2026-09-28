@@ -552,49 +552,48 @@ export default function Contact() {
                       <button
                         type="button"
                         onClick={async () => {
-                          const response = await fetch('/api/sms', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              plateNumber: vehicle.plate,
-                              customMessage: 'Test: Your lights are on!',
-                              phone: '+918641040560'
-                            })
-                          });
-                          const data = await response.json();
-                          if (data.success) {
-                            alert('Custom WhatsApp message sent!');
-                          } else {
-                            alert(`Error: ${data.error}`);
+                          try {
+                            // Send via Telegram
+                            const telegramRes = await fetch('/api/telegram-alert', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                plateNumber: vehicle.plate,
+                                customMessage: messageText || 'Please move your vehicle immediately!'
+                              })
+                            });
+                            const telegramData = await telegramRes.json();
+                            
+                            // Also send WhatsApp
+                            const smsRes = await fetch('/api/sms', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                plateNumber: vehicle.plate,
+                                customMessage: messageText || 'Please move your vehicle immediately!',
+                                phone: '+918641040560'
+                              })
+                            });
+                            const smsData = await smsRes.json();
+                            
+                            if (telegramData.success && smsData.success) {
+                              alert('Alert sent via Telegram & WhatsApp!');
+                            } else if (telegramData.success) {
+                              alert('Telegram alert sent! WhatsApp failed: ' + (smsData.error || 'Unknown error'));
+                            } else if (smsData.success) {
+                              alert('WhatsApp sent! Telegram failed: ' + (telegramData.error || 'Unknown error'));
+                            } else {
+                              alert('Both failed. Telegram: ' + (telegramData.error || 'Unknown') + ', WhatsApp: ' + (smsData.error || 'Unknown'));
+                            }
+                          } catch (err) {
+                            console.error('Send error:', err);
+                            alert('Failed to send alert');
                           }
                         }}
-                        className="w-full py-3 px-6 rounded-full bg-surface-container-highest text-on-surface font-label-md text-label-md flex items-center justify-center gap-2 shadow-[2px_2px_0px_#111827] hover:bg-surface-variant transition-colors"
+                        className="w-full py-4 px-6 rounded-full bg-secondary text-on-secondary font-headline-md text-headline-md flex items-center justify-center gap-3 shadow-[4px_4px_0px_#111827] hover:bg-on-secondary-container transition-transform active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
                       >
-                        <span className="material-symbols-outlined text-[20px]">bug_report</span>
-                        <span>TEMP: Send Test WhatsApp</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const response = await fetch('/api/telegram-alert', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              plateNumber: vehicle.plate,
-                              customMessage: 'Test: Your lights are on and vehicle is blocking the gate!'
-                            })
-                          });
-                          const data = await response.json();
-                          if (data.success) {
-                            alert('Custom Telegram alert sent instantly!');
-                          } else {
-                            alert(`Error: ${data.error}`);
-                          }
-                        }}
-                        className="w-full py-3 px-6 rounded-full bg-surface-container-highest text-on-surface font-label-md text-label-md flex items-center justify-center gap-2 shadow-[2px_2px_0px_#111827] hover:bg-surface-variant transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-[20px]">telegram</span>
-                        <span>TEMP: Send Test Telegram</span>
+                        <span className="material-symbols-outlined text-[24px]">send</span>
+                        <span>Send Alert (Telegram + WhatsApp)</span>
                       </button>
                       <p className="font-body-sm text-body-sm text-center text-on-surface-variant mt-2.5">
                         Delivered within seconds via Push + SMS Gateway
