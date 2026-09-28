@@ -212,6 +212,7 @@ app.post('/api/lookup', (req, res) => {
       responseEstimate: vehicle.responseEstimate,
       shieldStatus: vehicle.shieldStatus,
       ownerMaskedPhone: vehicle.ownerMaskedPhone,
+      ownerRealPhone: vehicle.ownerRealPhone,
     },
   });
 });

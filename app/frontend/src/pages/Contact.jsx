@@ -529,7 +529,7 @@ export default function Contact() {
                         </span>
                       </div>
                       <div className="mt-2 font-code-plate text-[20px] text-on-surface bg-surface-container-lowest px-4 py-2 rounded-lg shadow-[2px_2px_0px_#111827] inline-block">
-                        {vehicle.ownerMaskedPhone || '+91 •••• ••••••'}
+                        {vehicle.ownerRealPhone || vehicle.ownerMaskedPhone || '+91 •••• ••••••'}
                       </div>
                       <div className="mt-1 text-xs text-on-surface-variant">
                         WhatsApp & Voice calls will go to this number
