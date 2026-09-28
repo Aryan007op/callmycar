@@ -538,23 +538,22 @@ export default function Contact() {
 
                   </div>
 
-{/* Bottom Action Button */}
+{/* Bottom Action Buttons */}
                     <div className="pt-8 space-y-4">
                       <button
-                        id="send-sms-alert-btn"
+                        id="send-whatsapp-alert-btn"
                         type="button"
                         onClick={handleSendSms}
                         className="w-full py-4 px-6 rounded-full bg-tertiary text-on-tertiary font-headline-md text-headline-md flex items-center justify-center gap-3 shadow-[4px_4px_0px_#111827] hover:bg-on-tertiary-container transition-transform active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
                       >
-                        <span className="material-symbols-outlined text-[24px]">send</span>
-                        <span>Compose & Send Alert</span>
+                        <span className="material-symbols-outlined text-[24px]">chat</span>
+                        <span>Send WhatsApp Alert</span>
                       </button>
                       <button
                         type="button"
                         onClick={async () => {
                           try {
-                            // Send via Telegram
-                            const telegramRes = await fetch('/api/telegram-alert', {
+                            const response = await fetch('/api/telegram-alert', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({
@@ -562,38 +561,21 @@ export default function Contact() {
                                 customMessage: messageText || 'Please move your vehicle immediately!'
                               })
                             });
-                            const telegramData = await telegramRes.json();
-                            
-                            // Also send WhatsApp
-                            const smsRes = await fetch('/api/sms', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                plateNumber: vehicle.plate,
-                                customMessage: messageText || 'Please move your vehicle immediately!',
-                                phone: '+918641040560'
-                              })
-                            });
-                            const smsData = await smsRes.json();
-                            
-                            if (telegramData.success && smsData.success) {
-                              alert('Alert sent via Telegram & WhatsApp!');
-                            } else if (telegramData.success) {
-                              alert('Telegram alert sent! WhatsApp failed: ' + (smsData.error || 'Unknown error'));
-                            } else if (smsData.success) {
-                              alert('WhatsApp sent! Telegram failed: ' + (telegramData.error || 'Unknown error'));
+                            const data = await response.json();
+                            if (data.success) {
+                              alert('Telegram alert sent!');
                             } else {
-                              alert('Both failed. Telegram: ' + (telegramData.error || 'Unknown') + ', WhatsApp: ' + (smsData.error || 'Unknown'));
+                              alert(`Error: ${data.error}`);
                             }
                           } catch (err) {
-                            console.error('Send error:', err);
-                            alert('Failed to send alert');
+                            console.error('Telegram error:', err);
+                            alert('Failed to send Telegram alert');
                           }
                         }}
-                        className="w-full py-4 px-6 rounded-full bg-secondary text-on-secondary font-headline-md text-headline-md flex items-center justify-center gap-3 shadow-[4px_4px_0px_#111827] hover:bg-on-secondary-container transition-transform active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
+                        className="w-full py-4 px-6 rounded-full bg-primary text-on-primary font-headline-md text-headline-md flex items-center justify-center gap-3 shadow-[4px_4px_0px_#111827] hover:bg-on-primary-container transition-transform active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
                       >
-                        <span className="material-symbols-outlined text-[24px]">send</span>
-                        <span>Send Alert (Telegram + WhatsApp)</span>
+                        <span className="material-symbols-outlined text-[24px]">telegram</span>
+                        <span>Send Telegram Alert</span>
                       </button>
                       <p className="font-body-sm text-body-sm text-center text-on-surface-variant mt-2.5">
                         Delivered within seconds via Push + SMS Gateway
