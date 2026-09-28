@@ -573,6 +573,29 @@ export default function Contact() {
                         <span className="material-symbols-outlined text-[20px]">bug_report</span>
                         <span>TEMP: Send Test WhatsApp</span>
                       </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const response = await fetch('/api/telegram-alert', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              plateNumber: vehicle.plate,
+                              customMessage: 'Test: Your lights are on and vehicle is blocking the gate!'
+                            })
+                          });
+                          const data = await response.json();
+                          if (data.success) {
+                            alert('Custom Telegram alert sent instantly!');
+                          } else {
+                            alert(`Error: ${data.error}`);
+                          }
+                        }}
+                        className="w-full py-3 px-6 rounded-full bg-surface-container-highest text-on-surface font-label-md text-label-md flex items-center justify-center gap-2 shadow-[2px_2px_0px_#111827] hover:bg-surface-variant transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">telegram</span>
+                        <span>TEMP: Send Test Telegram</span>
+                      </button>
                       <p className="font-body-sm text-body-sm text-center text-on-surface-variant mt-2.5">
                         Delivered within seconds via Push + SMS Gateway
                       </p>
