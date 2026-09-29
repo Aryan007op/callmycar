@@ -10,6 +10,7 @@ export default function Home() {
   const [isVerified, setIsVerified] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
+  const [plateError, setPlateError] = useState('');
 
   const [plateSegments, setPlateSegments] = useState({
     state: 'DL',
@@ -22,6 +23,7 @@ export default function Home() {
     setState(newState);
     setPlateSegments((prev) => ({ ...prev, state: newState }));
     setIsVerified(false);
+    setPlateError('');
   };
 
   const updateSegment = (segment, value) => {
@@ -31,6 +33,7 @@ export default function Home() {
     if (segment === 'number') maxLength = 4;
     setPlateSegments((prev) => ({ ...prev, [segment]: cleaned.slice(0, maxLength) }));
     setIsVerified(false);
+    setPlateError('');
   };
 
   const getPlateString = () => {
@@ -47,8 +50,13 @@ export default function Home() {
 
   const handleProceedToContact = (e) => {
     if (e) e.preventDefault();
+    const { district, series, number } = plateSegments;
+    if (!district || !series || !number) {
+      setPlateError('Please enter a valid vehicle number plate.');
+      return;
+    }
+    setPlateError('');
     const pl = getPlateString();
-    if (!pl.trim()) return;
     navigate(`/contact/${encodeURIComponent(pl.trim())}?state=${state}`);
   };
 
@@ -459,6 +467,13 @@ export default function Home() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Inline validation error */}
+                      {plateError && (
+                        <p className="font-body-sm text-body-sm text-error -mt-2">
+                          {plateError}
+                        </p>
+                      )}
 
                       {/* Fast Suggestion Badges */}
                       <div className="flex flex-wrap items-center gap-2 pt-1">

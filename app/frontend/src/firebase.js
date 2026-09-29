@@ -2,13 +2,13 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY || process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyAM2xHdGuO61n3OuekMgrN7uYbsDdUjIUU",
-  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "callmycar-c3e30.firebaseapp.com",
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID || process.env.REACT_APP_FIREBASE_PROJECT_ID || "callmycar-c3e30",
-  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "callmycar-c3e30.firebasestorage.app",
-  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "313664963058",
-  appId: process.env.VITE_FIREBASE_APP_ID || process.env.REACT_APP_FIREBASE_APP_ID || "1:313664963058:web:dbe3bcd0a3c99057deeb6b",
-  measurementId: process.env.VITE_FIREBASE_MEASUREMENT_ID || process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || "G-WBCMC4KYZ5"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyAM2xHdGuO61n3OuekMgrN7uYbsDdUjIUU",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "callmycar-c3e30.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "callmycar-c3e30",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "callmycar-c3e30.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "313664963058",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:313664963058:web:dbe3bcd0a3c99057deeb6b",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-WBCMC4KYZ5"
 };
 
 const app = initializeApp(firebaseConfig);
