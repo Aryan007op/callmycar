@@ -4,6 +4,15 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import AICallModal from '../components/AICallModal';
 import { lookupVehicle, initiateCall, sendSms } from '../api/client';
+import { getVehicleFromFirebase } from '../firebase';
+
+function maskPhoneNumber(phone) {
+  if (!phone) return '+91 •••• ••••••';
+  const clean = phone.replace(/[^0-9+]/g, '');
+  if (clean.length < 4) return '••••';
+  const lastFour = clean.slice(-4);
+  return `+•• •••• ••${lastFour}`;
+}
 
 export default function Contact() {
   const { plate = 'DL 01 AB 1234' } = useParams();
@@ -26,11 +35,63 @@ export default function Contact() {
     shieldStatus: 'Active Member Shield',
   });
   const [smsFeedback, setSmsFeedback] = useState('');
+  const [targetPhone, setTargetPhone] = useState('');
+  const [targetChatId, setTargetChatId] = useState('');
+  const [isEditingTarget, setIsEditingTarget] = useState(false);
+  const [isSendingTelegram, setIsSendingTelegram] = useState(false);
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
 
   useEffect(() => {
-    lookupVehicle(decodeURIComponent(plate), stateParam).then((res) => {
-      if (res) setVehicle(res);
-    });
+    let isMounted = true;
+    const fetchVehicleData = async () => {
+      const decodedPlate = decodeURIComponent(plate);
+      const cleanPlate = decodedPlate.replace(/\s+/g, '').toUpperCase();
+
+      // 1. Fetch from Firestore (saved when user registered)
+      let fbData = null;
+      try {
+        fbData = await getVehicleFromFirebase(cleanPlate);
+        console.log('Firebase vehicle record:', fbData);
+      } catch (err) {
+        console.warn('Firebase vehicle lookup note:', err);
+      }
+
+      // 2. Fetch from backend lookup
+      let backendData = null;
+      try {
+        backendData = await lookupVehicle(decodedPlate, stateParam);
+      } catch (err) {
+        console.warn('Backend vehicle lookup note:', err);
+      }
+
+      if (!isMounted) return;
+
+      const registeredPhone = fbData?.phone || backendData?.ownerRealPhone || '';
+      const registeredChatId = fbData?.telegramChatId || backendData?.telegramChatId || '';
+      const vehicleDesc = fbData?.make
+        ? `${fbData.color || ''} ${fbData.make} ${fbData.model} (${fbData.year || ''})`.trim()
+        : (backendData?.displayName || 'Registered Vehicle');
+
+      const merged = {
+        plate: decodedPlate,
+        state: stateParam,
+        displayName: vehicleDesc,
+        responseEstimate: backendData?.responseEstimate || '~30-45 Seconds',
+        shieldStatus: backendData?.shieldStatus || 'Active Member Shield',
+        registered: true,
+        verified: true,
+        ownerRealPhone: registeredPhone,
+        ownerMaskedPhone: registeredPhone ? maskPhoneNumber(registeredPhone) : (backendData?.ownerMaskedPhone || '+91 •••• ••••••'),
+        telegramChatId: registeredChatId,
+      };
+
+      setVehicle(merged);
+      setTargetPhone(registeredPhone);
+      setTargetChatId(registeredChatId);
+    };
+
+    fetchVehicleData();
+    return () => { isMounted = false; };
   }, [plate, stateParam]);
 
   const presetTemplates = [
@@ -67,21 +128,65 @@ export default function Contact() {
       issue: riskTier,
       urgency,
       ai_mode: aiMode,
+      phone: targetPhone || vehicle.ownerRealPhone,
     });
     setCallSession(res);
     setIsModalOpen(true);
   };
 
   const handleSendSms = async () => {
-    const res = await sendSms({
-      plate: vehicle.plate,
-      message: messageText,
-      phone: '+918641040560',
-    });
-    setSmsFeedback(`Encrypted SMS alert dispatched successfully to owner of ${vehicle.plate}!`);
-    setTimeout(() => {
-      setSmsFeedback('');
-    }, 4500);
+    const destPhone = targetPhone || vehicle.ownerRealPhone;
+    if (!destPhone) {
+      alert('Please enter or register a recipient phone number first.');
+      return;
+    }
+    setIsSendingWhatsApp(true);
+    try {
+      const res = await sendSms({
+        plate: vehicle.plate,
+        message: messageText,
+        phone: destPhone,
+      });
+      if (res && res.error) {
+        alert(`WhatsApp error: ${res.error}`);
+      } else {
+        setSmsFeedback(`Encrypted WhatsApp alert dispatched successfully to ${destPhone}!`);
+        setTimeout(() => {
+          setSmsFeedback('');
+        }, 4500);
+      }
+    } catch (e) {
+      alert(`Failed to send WhatsApp alert: ${e.message}`);
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
+  };
+
+  const handleSendTelegram = async () => {
+    const destChatId = targetChatId || vehicle.telegramChatId;
+    setIsSendingTelegram(true);
+    try {
+      const response = await fetch('/api/telegram-alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plateNumber: vehicle.plate,
+          customMessage: messageText || 'Please move your vehicle immediately!',
+          chatId: destChatId ? destChatId.trim() : undefined,
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert(`Telegram alert sent successfully to ${data.targetChatId ? `Chat ID ${data.targetChatId}` : 'Telegram'}!`);
+      } else {
+        alert(`Telegram Error: ${data.error || 'Failed to send Telegram alert'}`);
+      }
+    } catch (err) {
+      console.error('Telegram error:', err);
+      alert('Failed to send Telegram alert: ' + err.message);
+    } finally {
+      setIsSendingTelegram(false);
+    }
   };
 
   return (
@@ -520,19 +625,77 @@ export default function Contact() {
                       </div>
                     )}
 
-                    {/* TEMP: Target Phone Display */}
-                    <div className="mb-4 p-4 bg-warning-container/20 border-2 border-warning rounded-xl shadow-[3px_3px_0px_#111827]">
-                      <div className="flex items-center gap-2 text-warning">
-                        <span className="material-symbols-outlined">phone_in_talk</span>
-                        <span className="font-label-md text-label-md uppercase tracking-wider">
-                          TEMP: Target Number for Call & SMS
-                        </span>
+                    {/* Relay Delivery Destinations (Phone & Telegram) */}
+                    <div className="mb-4 p-4 bg-surface-container-lowest border-2 border-on-surface rounded-xl shadow-[3px_3px_0px_#111827] space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-on-surface font-title-md">
+                          <span className="material-symbols-outlined text-[20px] text-tertiary">hub</span>
+                          <span className="font-label-md text-label-md uppercase tracking-wider">
+                            Active Relay Delivery Destinations
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingTarget(!isEditingTarget)}
+                          className="px-2.5 py-1 rounded-full bg-surface-container font-label-sm text-[12px] text-on-surface shadow-[1.5px_1.5px_0px_#111827] hover:bg-secondary-fixed transition-colors cursor-pointer"
+                        >
+                          {isEditingTarget ? 'Done Testing' : 'Edit / Override Targets'}
+                        </button>
                       </div>
-                      <div className="mt-2 font-code-plate text-[20px] text-on-surface bg-surface-container-lowest px-4 py-2 rounded-lg shadow-[2px_2px_0px_#111827] inline-block">
-                        {vehicle.ownerRealPhone || vehicle.ownerMaskedPhone || '+91 •••• ••••••'}
-                      </div>
-                      <div className="mt-1 text-xs text-on-surface-variant">
-                        WhatsApp & Voice calls will go to this number
+
+                      {isEditingTarget ? (
+                        <div className="space-y-3 pt-1">
+                          <div>
+                            <label className="block text-xs font-bold uppercase text-on-surface-variant mb-1">
+                              Target Phone (WhatsApp & Voice Call)
+                            </label>
+                            <input
+                              type="tel"
+                              value={targetPhone}
+                              onChange={(e) => setTargetPhone(e.target.value)}
+                              placeholder="+91 98765 43210"
+                              className="w-full h-10 px-3 rounded-lg bg-surface-container font-mono text-sm text-on-surface border border-on-surface/20 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold uppercase text-on-surface-variant mb-1">
+                              Target Telegram Chat ID (For Telegram Bot)
+                            </label>
+                            <input
+                              type="text"
+                              value={targetChatId}
+                              onChange={(e) => setTargetChatId(e.target.value)}
+                              placeholder="e.g. 5839201948 (Chat ID from @userinfobot)"
+                              className="w-full h-10 px-3 rounded-lg bg-surface-container font-mono text-sm text-on-surface border border-on-surface/20 focus:outline-none"
+                            />
+                            <p className="text-[11px] text-on-surface-variant mt-1">
+                              Telegram bots deliver to numerical Chat IDs. Leave empty to use default TELEGRAM_CHAT_ID.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-sm">
+                          <div className="p-2.5 bg-surface-container rounded-lg">
+                            <span className="text-xs uppercase text-on-surface-variant block font-bold">WhatsApp & Voice:</span>
+                            <span className="font-mono text-on-surface font-semibold">
+                              {targetPhone || vehicle.ownerRealPhone || vehicle.ownerMaskedPhone || 'None configured'}
+                            </span>
+                          </div>
+                          <div className="p-2.5 bg-surface-container rounded-lg">
+                            <span className="text-xs uppercase text-on-surface-variant block font-bold">Telegram Chat ID:</span>
+                            <span className="font-mono text-on-surface font-semibold">
+                              {targetChatId || vehicle.telegramChatId ? (
+                                <span className="text-tertiary">ID: {targetChatId || vehicle.telegramChatId}</span>
+                              ) : (
+                                <span className="text-on-surface-variant">Default server channel</span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="text-[11px] text-on-surface-variant">
+                        Each registered vehicle delivers alerts to its own owner phone number and Telegram Chat ID.
                       </div>
                     </div>
 
@@ -543,39 +706,21 @@ export default function Contact() {
                       <button
                         id="send-whatsapp-alert-btn"
                         type="button"
+                        disabled={isSendingWhatsApp}
                         onClick={handleSendSms}
-                        className="w-full py-4 px-6 rounded-full bg-tertiary text-on-tertiary font-headline-md text-headline-md flex items-center justify-center gap-3 shadow-[4px_4px_0px_#111827] hover:bg-on-tertiary-container transition-transform active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
+                        className="w-full py-4 px-6 rounded-full bg-tertiary text-on-tertiary font-headline-md text-headline-md flex items-center justify-center gap-3 shadow-[4px_4px_0px_#111827] hover:bg-on-tertiary-container transition-transform active:translate-x-0.5 active:translate-y-0.5 cursor-pointer disabled:opacity-50"
                       >
                         <span className="material-symbols-outlined text-[24px]">chat</span>
-                        <span>Send WhatsApp Alert</span>
+                        <span>{isSendingWhatsApp ? 'Sending WhatsApp...' : 'Send WhatsApp Alert'}</span>
                       </button>
                       <button
                         type="button"
-                        onClick={async () => {
-                          try {
-                            const response = await fetch('/api/telegram-alert', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                plateNumber: vehicle.plate,
-                                customMessage: messageText || 'Please move your vehicle immediately!'
-                              })
-                            });
-                            const data = await response.json();
-                            if (data.success) {
-                              alert('Telegram alert sent!');
-                            } else {
-                              alert(`Error: ${data.error}`);
-                            }
-                          } catch (err) {
-                            console.error('Telegram error:', err);
-                            alert('Failed to send Telegram alert');
-                          }
-                        }}
-                        className="w-full py-4 px-6 rounded-full bg-primary text-on-primary font-headline-md text-headline-md flex items-center justify-center gap-3 shadow-[4px_4px_0px_#111827] hover:bg-on-primary-container transition-transform active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
+                        disabled={isSendingTelegram}
+                        onClick={handleSendTelegram}
+                        className="w-full py-4 px-6 rounded-full bg-primary text-on-primary font-headline-md text-headline-md flex items-center justify-center gap-3 shadow-[4px_4px_0px_#111827] hover:bg-on-primary-container transition-transform active:translate-x-0.5 active:translate-y-0.5 cursor-pointer disabled:opacity-50"
                       >
                         <span className="material-symbols-outlined text-[24px]">telegram</span>
-                        <span>Send Telegram Alert</span>
+                        <span>{isSendingTelegram ? 'Sending Telegram...' : 'Send Telegram Alert'}</span>
                       </button>
                       <p className="font-body-sm text-body-sm text-center text-on-surface-variant mt-2.5">
                         Delivered within seconds via Push + SMS Gateway

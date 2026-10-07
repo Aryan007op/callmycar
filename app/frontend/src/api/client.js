@@ -56,12 +56,12 @@ export async function lookupVehicle(plate, state = 'NY') {
   };
 }
 
-export async function initiateCall({ plate, issue, urgency = 'urgent', ai_mode = 'bot' }) {
+export async function initiateCall({ plate, issue, urgency = 'urgent', ai_mode = 'bot', phone }) {
   try {
     const res = await fetch(`${BACKEND_URL}/api/call`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plate, issue, urgency, ai_mode }),
+      body: JSON.stringify({ plate, issue, urgency, ai_mode, phone }),
     });
     if (res.ok) {
       return await res.json();
@@ -130,7 +130,7 @@ export async function sendSms({ plate, message, phone }) {
       body: JSON.stringify({
         plateNumber: cleanPlate,
         customMessage: message,
-        phone: phone || '+918641040560',
+        phone: phone || '',
       }),
     });
     if (res.ok) {
@@ -146,4 +146,26 @@ export async function sendSms({ plate, message, phone }) {
     status: 'delivered',
     message: `Encrypted SMS alert dispatched successfully to the owner of ${plate}!`,
   };
+}
+
+export async function sendTelegramAlert({ plate, message, chatId }) {
+  try {
+    const cleanPlate = (plate || '').replace(/\s+/g, '').toUpperCase();
+    const res = await fetch(`${BACKEND_URL}/api/telegram-alert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        plateNumber: cleanPlate,
+        customMessage: message,
+        chatId: chatId || undefined,
+      }),
+    });
+    return await res.json();
+  } catch (err) {
+    console.warn('Backend unavailable, using fallback Telegram response:', err);
+    return {
+      success: false,
+      error: err.message,
+    };
+  }
 }

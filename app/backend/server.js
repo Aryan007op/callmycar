@@ -117,6 +117,7 @@ app.post('/api/register', (req, res) => {
     color = 'Silver',
     ownerPhone = '',
     ownerName = 'Civic Member',
+    telegramChatId = '',
     notifyCall = true,
     notifySms = true,
   } = req.body;
@@ -144,6 +145,7 @@ app.post('/api/register', (req, res) => {
     ownerMaskedPhone: maskedPhone,
     ownerRealPhone: ownerPhone,
     ownerName,
+    telegramChatId: telegramChatId ? telegramChatId.toString().trim() : '',
     notifyCall,
     notifySms,
     registeredAt: new Date().toISOString(),
@@ -162,6 +164,7 @@ app.post('/api/register', (req, res) => {
       displayName: vehicleRecord.displayName,
       shieldStatus: vehicleRecord.shieldStatus,
       ownerMaskedPhone: vehicleRecord.ownerMaskedPhone,
+      telegramChatId: vehicleRecord.telegramChatId,
       registered: true,
       verified: true,
     },
@@ -213,6 +216,7 @@ app.post('/api/lookup', (req, res) => {
       shieldStatus: vehicle.shieldStatus,
       ownerMaskedPhone: vehicle.ownerMaskedPhone,
       ownerRealPhone: vehicle.ownerRealPhone,
+      telegramChatId: vehicle.telegramChatId || '',
     },
   });
 });
@@ -222,13 +226,17 @@ app.post('/api/lookup', (req, res) => {
  * Trigger automated AI Voice Agent call to vehicle owner
  */
 app.post('/api/call', async (req, res) => {
-  const { plate, issue = 'Driveway Blocked', urgency = 'urgent', ai_mode = 'bot' } = req.body;
+  const { plate, issue = 'Driveway Blocked', urgency = 'urgent', ai_mode = 'bot', phone } = req.body;
   const cleanPlate = normalizePlate(plate);
   const vehicle = VEHICLE_DATABASE[cleanPlate] || {
     plate: cleanPlate || 'AA 1234',
     displayName: 'Registered Vehicle',
     responseEstimate: '~42 Seconds',
+    ownerRealPhone: phone || '+15550194291',
   };
+  if (phone) {
+    vehicle.ownerRealPhone = phone;
+  }
 
   const callId = `call_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const startTime = Date.now();
@@ -428,16 +436,20 @@ app.post('/api/sms', async (req, res) => {
 
   try {
     const body = req.body || {};
-    const plateNumber = body.plateNumber || body.licensePlate || 'CG28J9934';
+    const plateNumber = body.plateNumber || body.licensePlate || '';
     const customMessage = body.customMessage || body.message || 'Please move your vehicle!';
     
-    let targetPhone = body.phone || '+918641040560';
+    const cleanPlate = plateNumber.replace(/\s+/g, '').toUpperCase();
+    const vehicle = cleanPlate ? VEHICLE_DATABASE[cleanPlate] : null;
+
+    let targetPhone = body.phone || (vehicle && vehicle.ownerRealPhone) || process.env.DEFAULT_ALERT_PHONE || '';
     targetPhone = targetPhone.trim();
+    if (!targetPhone) {
+      return res.status(400).json({ error: 'Recipient phone number is required to send WhatsApp message.' });
+    }
     if (!targetPhone.startsWith('+')) {
       targetPhone = `+91${targetPhone}`;
     }
-
-    const cleanPlate = plateNumber.replace(/\s+/g, '').toUpperCase();
 
     // Must use contentSid & contentVariables for Twilio WhatsApp (fixes Error 21654)
     const message = await twilioClient.messages.create({
@@ -446,14 +458,14 @@ app.post('/api/sms', async (req, res) => {
       contentSid: 'HXfe5ab5f00277942d4d4200328b4d403c',
       contentVariables: JSON.stringify({
         1: 'CallMyCar',
-        2: cleanPlate,
+        2: cleanPlate || 'ALERT',
         3: 'NOW',
         4: customMessage
       })
     });
 
-    console.log('WhatsApp sent successfully:', message.sid);
-    return res.status(200).json({ success: true, messageId: message.sid });
+    console.log(`WhatsApp sent successfully to ${targetPhone}:`, message.sid);
+    return res.status(200).json({ success: true, messageId: message.sid, targetPhone });
   } catch (error) {
     console.error('Twilio WhatsApp Error:', error);
     return res.status(500).json({ error: error.message || 'Failed to send WhatsApp message' });
@@ -469,17 +481,37 @@ app.post('/api/telegram-alert', async (req, res) => {
 
   try {
     const body = req.body || {};
-    const plateNumber = body.plateNumber || body.licensePlate || 'CG28J9934';
+    const plateNumber = body.plateNumber || body.licensePlate || '';
     const customMessage = body.customMessage || body.message || 'Please move your vehicle immediately!';
-    const chatId = body.chatId || process.env.TELEGRAM_CHAT_ID || 'YOUR_CHAT_ID_HERE';
-
+    
     const cleanPlate = plateNumber.replace(/\s+/g, '').toUpperCase();
+    const vehicle = cleanPlate ? VEHICLE_DATABASE[cleanPlate] : null;
+
+    // Recipient Chat ID priority:
+    // 1. Explicitly passed in body.chatId
+    // 2. Saved in vehicle registration (vehicle.telegramChatId)
+    // 3. Server fallback process.env.TELEGRAM_CHAT_ID
+    const chatId = (body.chatId ? body.chatId.toString().trim() : '') ||
+                   (vehicle && vehicle.telegramChatId ? vehicle.telegramChatId.toString().trim() : '') ||
+                   process.env.TELEGRAM_CHAT_ID;
+
+    if (!chatId || chatId === 'YOUR_CHAT_ID_HERE') {
+      return res.status(400).json({
+        success: false,
+        error: 'No Telegram Chat ID specified. Please register a Telegram Chat ID or provide one in the request.'
+      });
+    }
 
     // Format rich custom message with Markdown
-    const messageText = `🚨 *CALLMYCAR VEHICLE ALERT* 🚨\n\n🚗 *Vehicle:* \`${cleanPlate}\`\n💬 *Message:* ${customMessage}\n\n⏰ *Time:* ${new Date().toLocaleTimeString()}`;
+    const messageText = `🚨 *CALLMYCAR VEHICLE ALERT* 🚨\n\n🚗 *Vehicle:* \`${cleanPlate || 'ALERT'}\`\n💬 *Message:* ${customMessage}\n\n⏰ *Time:* ${new Date().toLocaleTimeString()}`;
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN_HERE';
-    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+    if (!botToken || botToken === 'YOUR_BOT_TOKEN_HERE') {
+      return res.status(500).json({
+        success: false,
+        error: 'Telegram Bot Token is not configured on the server (TELEGRAM_BOT_TOKEN is missing).'
+      });
+    }
 
     // Using native Node.js fetch (Node 18+) to avoid import duplicate crashes
     const telegramRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -494,11 +526,12 @@ app.post('/api/telegram-alert', async (req, res) => {
 
     const data = await telegramRes.json();
     if (!telegramRes.ok) {
+      console.error('Telegram API rejected send:', data);
       throw new Error(data.description || 'Failed to send Telegram message');
     }
 
-    console.log('Telegram Alert Sent:', data.ok);
-    return res.status(200).json({ success: true, result: data });
+    console.log(`Telegram Alert Sent successfully to chat_id [${chatId}]:`, data.ok);
+    return res.status(200).json({ success: true, result: data, targetChatId: chatId });
   } catch (error) {
     console.error('Telegram API Error:', error.message);
     return res.status(500).json({ 
