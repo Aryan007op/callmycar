@@ -22,6 +22,11 @@ export const saveVehicleToFirebase = async (plateNumber, ownerData) => {
     ownerName: ownerData.name || ownerData.ownerName || "Vehicle Owner",
     phone: ownerData.phone || "",
     telegramChatId: ownerData.telegramChatId || "",
+    make: ownerData.make || "",
+    model: ownerData.model || "",
+    color: ownerData.color || "",
+    year: ownerData.year || "",
+    displayName: ownerData.displayName || `${ownerData.color || ''} ${ownerData.make || ''} ${ownerData.model || ''} (${ownerData.year || ''})`.trim(),
     createdAt: new Date().toISOString()
   });
 };

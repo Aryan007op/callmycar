@@ -21,6 +21,7 @@ export default function Register() {
     color: 'Gravity Gold',
     ownerPhone: '+91 98765 43210',
     ownerName: 'Alex Rivera',
+    telegramChatId: '',
     notifyCall: true,
     notifySms: true,
   });
@@ -84,15 +85,23 @@ export default function Register() {
 
       // Save to Firestore 'vehicles' collection
       await saveVehicleToFirebase(cleanPlate, {
-        name: formData.ownerName || 'Test Owner',
-        phone: formData.ownerPhone || '+918641040560',
-        telegramChatId: formData.telegramChatId || ''
+        name: formData.ownerName || 'Vehicle Owner',
+        phone: formData.ownerPhone.trim(),
+        telegramChatId: (formData.telegramChatId || '').trim(),
+        make: formData.make,
+        model: formData.model,
+        color: formData.color,
+        year: formData.year,
       });
 
       console.log("Firestore Write Success!");
 
       // Also call backend API
-      const res = await registerVehicle({ ...formData, plate });
+      const res = await registerVehicle({ 
+        ...formData, 
+        plate,
+        telegramChatId: (formData.telegramChatId || '').trim() 
+      });
       if (res && res.success) {
         setRegisteredResult(res.vehicle);
         console.log("Backend API Success!");
@@ -244,6 +253,7 @@ export default function Register() {
 
                     <div className="text-left text-on-surface-variant space-y-1 font-body-sm text-body-sm">
                       <p>• Masked Route: {registeredResult.ownerMaskedPhone}</p>
+                      <p>• Telegram: {registeredResult.telegramChatId ? `Chat ID ${registeredResult.telegramChatId}` : 'Default Relay Bot'}</p>
                       <p>• Relay Response: ~30-45s average</p>
                       <p>• Status: 100% Anonymized Civic Proxy</p>
                     </div>
@@ -502,6 +512,36 @@ export default function Register() {
                           <span className="material-symbols-outlined text-[15px]">lock</span>
                           Encrypted on backend. Neither reporters nor public lookups can ever view this.
                         </p>
+                      </div>
+
+                      {/* Telegram Chat ID (For Telegram Bot Alerts) */}
+                      <div className="p-4 rounded-xl bg-surface-container-low border border-on-surface/10 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label
+                            htmlFor="telegramChatId"
+                            className="block font-label-md text-label-md uppercase text-on-surface"
+                          >
+                            Owner Telegram Chat ID (For Telegram Alerts)
+                          </label>
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed">
+                            RECOMMENDED
+                          </span>
+                        </div>
+                        <input
+                          id="telegramChatId"
+                          name="telegramChatId"
+                          type="text"
+                          value={formData.telegramChatId}
+                          onChange={handleChange}
+                          placeholder="e.g. 5839201948"
+                          className="w-full h-12 px-4 rounded-xl bg-surface-container-lowest font-headline-md text-title-md text-on-surface shadow-[2px_2px_0px_#111827] focus:outline-none"
+                        />
+                        <div className="font-body-sm text-[12px] text-on-surface-variant flex items-start gap-1.5 pt-1">
+                          <span className="material-symbols-outlined text-[16px] text-tertiary shrink-0 mt-0.5">info</span>
+                          <span>
+                            Telegram bots deliver to a <strong>Chat ID</strong> (not directly to a phone number). To get your Chat ID: open Telegram, search for <strong>@userinfobot</strong>, tap Start, and paste your numerical ID here.
+                          </span>
+                        </div>
                       </div>
 
                       {/* Relay Notification Toggles */}
