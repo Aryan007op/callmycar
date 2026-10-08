@@ -1,18 +1,31 @@
+const path = require('path');
+const dotenv = require('dotenv');
+
+// Load environment variables at the very top before other modules or clients
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config(); // Fallback for root CWD
+
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const twilio = require('twilio');
-
-dotenv.config();
+const { isReady: isWhatsAppReady, sendAlert: sendWhatsAppAlert, formatIndianPhoneNumber } = require('./whatsappService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Initialize Twilio client
-const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+// Initialize Twilio client safely after dotenv has loaded
+let twilioClient = null;
+if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+  try {
+    twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  } catch (err) {
+    console.warn('Twilio initialization warning:', err.message);
+  }
+}
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // In-memory registered vehicles database (Mock VAHAN database)
 const VEHICLE_DATABASE = {
@@ -427,8 +440,8 @@ app.get('/api/status/:callId', async (req, res) => {
  * Send WhatsApp notification via Twilio template (fixes Error 21654)
  */
 app.post('/api/sms', async (req, res) => {
+  console.log("Payload received:", req.body);
   console.log('Incoming /api/sms headers:', req.headers);
-  console.log('Incoming /api/sms body:', req.body);
 
   if (!req.body || Object.keys(req.body).length === 0) {
     return res.status(400).json({ error: 'Empty request body received by server' });
@@ -447,12 +460,33 @@ app.post('/api/sms', async (req, res) => {
     if (!targetPhone) {
       return res.status(400).json({ error: 'Recipient phone number is required to send WhatsApp message.' });
     }
+
+    // If whatsapp-web.js client has fired the ready event, send via whatsapp-web.js
+    if (isWhatsAppReady()) {
+      const cleanNumber = String(targetPhone).replace(/[\s\-+]/g, '').replace(/\D/g, '');
+      const tenDigitNumber = cleanNumber.slice(-10);
+      const recipient = `91${tenDigitNumber}@c.us`;
+
+      const waResult = await sendWhatsAppAlert({ ownerPhone: recipient, plateNumber: cleanPlate, issue: customMessage });
+      console.log(`WhatsApp sent successfully via whatsapp-web.js to ${recipient}:`, waResult?.id?._serialized);
+      return res.status(200).json({ success: true, messageId: waResult?.id?._serialized || null, targetPhone: recipient });
+    }
+
     if (!targetPhone.startsWith('+')) {
       targetPhone = `+91${targetPhone}`;
     }
 
+    // Ensure Twilio credentials are valid before attempting to call the SDK
+    const activeTwilioClient = twilioClient || (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : null);
+    if (!activeTwilioClient) {
+      return res.status(500).json({
+        success: false,
+        error: 'Twilio configuration error: TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN is missing or undefined in .env.'
+      });
+    }
+
     // Must use contentSid & contentVariables for Twilio WhatsApp (fixes Error 21654)
-    const message = await twilioClient.messages.create({
+    const message = await activeTwilioClient.messages.create({
       from: 'whatsapp:+17372508034',
       to: `whatsapp:${targetPhone}`,
       contentSid: 'HXfe5ab5f00277942d4d4200328b4d403c',
@@ -467,7 +501,7 @@ app.post('/api/sms', async (req, res) => {
     console.log(`WhatsApp sent successfully to ${targetPhone}:`, message.sid);
     return res.status(200).json({ success: true, messageId: message.sid, targetPhone });
   } catch (error) {
-    console.error('Twilio WhatsApp Error:', error);
+    console.error("WhatsApp error:", error);
     return res.status(500).json({ error: error.message || 'Failed to send WhatsApp message' });
   }
 });
@@ -537,6 +571,57 @@ app.post('/api/telegram-alert', async (req, res) => {
     return res.status(500).json({ 
       success: false, 
       error: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/send-alert
+ * Send vehicle alert via WhatsApp using whatsapp-web.js
+ * Expected JSON body: { ownerPhone, plateNumber, issue }
+ */
+app.post('/api/send-alert', async (req, res) => {
+  console.log("Payload received:", req.body);
+
+  // Check if WhatsApp client has actually fired the ready event
+  if (!isWhatsAppReady()) {
+    return res.status(503).json({
+      success: false,
+      error: 'WhatsApp service is temporarily unavailable: client has not fired the ready event yet. Please scan the QR code in the terminal.'
+    });
+  }
+
+  try {
+    const body = req.body || {};
+    const rawPhone = body.ownerPhone || body.phone;
+    const plateNumber = body.plateNumber || body.plate || body.licensePlate;
+    const issue = body.issue || body.customMessage || body.message;
+
+    if (!rawPhone || !plateNumber || !issue) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: ownerPhone (or phone), plateNumber, and issue (or customMessage) are required.'
+      });
+    }
+
+    // Specifically strip out spaces, dashes, and + signs, and format strictly as 91[10-digit-number]@c.us
+    const cleanNumber = String(rawPhone).replace(/[\s\-+]/g, '').replace(/\D/g, '');
+    const tenDigitNumber = cleanNumber.slice(-10);
+    const recipient = `91${tenDigitNumber}@c.us`;
+
+    const result = await sendWhatsAppAlert({ ownerPhone: recipient, plateNumber, issue });
+
+    return res.status(200).json({
+      success: true,
+      message: 'WhatsApp alert sent successfully',
+      recipient,
+      messageId: result?.id?._serialized || null
+    });
+  } catch (error) {
+    console.error("WhatsApp error:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to send WhatsApp alert'
     });
   }
 });
