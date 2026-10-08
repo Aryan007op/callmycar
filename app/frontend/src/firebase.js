@@ -21,7 +21,6 @@ export const saveVehicleToFirebase = async (plateNumber, ownerData) => {
     plateNumber: cleanPlate,
     ownerName: ownerData.name || ownerData.ownerName || "Vehicle Owner",
     phone: ownerData.phone || "",
-    telegramChatId: ownerData.telegramChatId || "",
     make: ownerData.make || "",
     model: ownerData.model || "",
     color: ownerData.color || "",
@@ -29,12 +28,22 @@ export const saveVehicleToFirebase = async (plateNumber, ownerData) => {
     displayName: ownerData.displayName || `${ownerData.color || ''} ${ownerData.make || ''} ${ownerData.model || ''} (${ownerData.year || ''})`.trim(),
     createdAt: new Date().toISOString()
   });
+  await setDoc(doc(db, "vehicleTelegramDestinations", cleanPlate), {
+    plateNumber: cleanPlate,
+    telegramChatId: ownerData.telegramChatId || ""
+  });
+};
+
+export const getVehicleFromFirebase = async (plateNumber) => {
+  const cleanPlate = plateNumber.replace(/\s+/g, '').toUpperCase();
+  const docSnap = await getDoc(doc(db, "vehicles", cleanPlate));
+  return docSnap.exists() ? docSnap.data() : null;
 };
 
 // Helper: Get Vehicle
-export const getVehicleFromFirebase = async (plateNumber) => {
+export const getTelegramDestinationForVehicle = async (plateNumber) => {
   const cleanPlate = plateNumber.replace(/\s+/g, '').toUpperCase();
-  const docRef = doc(db, "vehicles", cleanPlate);
+  const docRef = doc(db, "vehicleTelegramDestinations", cleanPlate);
   const docSnap = await getDoc(docRef);
   return docSnap.exists() ? docSnap.data() : null;
 };

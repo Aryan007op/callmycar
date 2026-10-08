@@ -4,7 +4,7 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import AICallModal from '../components/AICallModal';
 import { lookupVehicle, initiateCall, sendSms } from '../api/client';
-import { getVehicleFromFirebase } from '../firebase';
+import { getVehicleFromFirebase, getTelegramDestinationForVehicle } from '../firebase';
 
 function maskPhoneNumber(phone) {
   if (!phone) return '+91 •••• ••••••';
@@ -49,11 +49,16 @@ export default function Contact() {
 
       // 1. Fetch from Firestore (saved when user registered)
       let fbData = null;
+      let telegramDestination = null;
       try {
         fbData = await getVehicleFromFirebase(cleanPlate);
-        console.log('Firebase vehicle record:', fbData);
       } catch (err) {
         console.warn('Firebase vehicle lookup note:', err);
+      }
+      try {
+        telegramDestination = await getTelegramDestinationForVehicle(cleanPlate);
+      } catch (err) {
+        console.warn('Telegram destination lookup note:', err);
       }
 
       // 2. Fetch from backend lookup
@@ -67,7 +72,7 @@ export default function Contact() {
       if (!isMounted) return;
 
       const registeredPhone = fbData?.phone || backendData?.ownerRealPhone || '';
-      const registeredChatId = fbData?.telegramChatId || backendData?.telegramChatId || '';
+      const registeredChatId = telegramDestination?.telegramChatId || fbData?.telegramChatId || backendData?.telegramChatId || '';
       const vehicleDesc = fbData?.make
         ? `${fbData.color || ''} ${fbData.make} ${fbData.model} (${fbData.year || ''})`.trim()
         : (backendData?.displayName || 'Registered Vehicle');
@@ -669,7 +674,7 @@ export default function Contact() {
                               className="w-full h-10 px-3 rounded-lg bg-surface-container font-mono text-sm text-on-surface border border-on-surface/20 focus:outline-none"
                             />
                             <p className="text-[11px] text-on-surface-variant mt-1">
-                              Telegram bots deliver to numerical Chat IDs. Leave empty to use default TELEGRAM_CHAT_ID.
+                              Telegram bots deliver to numerical Chat IDs. This vehicle's registered Chat ID is selected automatically; you can edit it here if needed.
                             </p>
                           </div>
                         </div>

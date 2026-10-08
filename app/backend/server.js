@@ -483,29 +483,22 @@ app.post('/api/telegram-alert', async (req, res) => {
     const body = req.body || {};
     const plateNumber = body.plateNumber || body.licensePlate || '';
     const customMessage = body.customMessage || body.message || 'Please move your vehicle immediately!';
-    
-    const cleanPlate = plateNumber.replace(/\s+/g, '').toUpperCase();
-    const vehicle = cleanPlate ? VEHICLE_DATABASE[cleanPlate] : null;
+    const normalizedPlate = normalizePlate(plateNumber);
+    const cleanPlate = normalizedPlate.replace(/\s+/g, '');
+    const vehicle = normalizedPlate ? VEHICLE_DATABASE[normalizedPlate] : null;
+    const chatId = String(body.chatId || vehicle?.telegramChatId || '').trim();
 
-    // Recipient Chat ID priority:
-    // 1. Explicitly passed in body.chatId
-    // 2. Saved in vehicle registration (vehicle.telegramChatId)
-    // 3. Server fallback process.env.TELEGRAM_CHAT_ID
-    const chatId = (body.chatId ? body.chatId.toString().trim() : '') ||
-                   (vehicle && vehicle.telegramChatId ? vehicle.telegramChatId.toString().trim() : '') ||
-                   process.env.TELEGRAM_CHAT_ID;
-
-    if (!chatId || chatId === 'YOUR_CHAT_ID_HERE') {
-      return res.status(400).json({
-        success: false,
-        error: 'No Telegram Chat ID specified. Please register a Telegram Chat ID or provide one in the request.'
-      });
+    if (!plateNumber.trim()) {
+      return res.status(400).json({ success: false, error: 'Vehicle plate number is required.' });
+    }
+    if (!chatId) {
+      return res.status(400).json({ success: false, error: 'No Telegram chat ID is registered for this vehicle.' });
     }
 
     // Format rich custom message with Markdown
     const messageText = `🚨 *CALLMYCAR VEHICLE ALERT* 🚨\n\n🚗 *Vehicle:* \`${cleanPlate || 'ALERT'}\`\n💬 *Message:* ${customMessage}\n\n⏰ *Time:* ${new Date().toLocaleTimeString()}`;
 
-    const botToken = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN_HERE';
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (!botToken || botToken === 'YOUR_BOT_TOKEN_HERE') {
       return res.status(500).json({
         success: false,

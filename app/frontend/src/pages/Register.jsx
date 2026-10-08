@@ -253,7 +253,7 @@ export default function Register() {
 
                     <div className="text-left text-on-surface-variant space-y-1 font-body-sm text-body-sm">
                       <p>• Masked Route: {registeredResult.ownerMaskedPhone}</p>
-                      <p>• Telegram: {registeredResult.telegramChatId ? `Chat ID ${registeredResult.telegramChatId}` : 'Default Relay Bot'}</p>
+                      <p>• Telegram: {registeredResult.telegramChatId ? `Chat ID ${registeredResult.telegramChatId}` : 'Not configured'}</p>
                       <p>• Relay Response: ~30-45s average</p>
                       <p>• Status: 100% Anonymized Civic Proxy</p>
                     </div>
