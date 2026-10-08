@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -21,7 +21,6 @@ export default function Register() {
     color: 'Gravity Gold',
     ownerPhone: '+91 98765 43210',
     ownerName: 'Alex Rivera',
-    telegramChatId: '',
     notifyCall: true,
     notifySms: true,
   });
@@ -51,6 +50,14 @@ export default function Register() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [registeredResult, setRegisteredResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [telegramBotUsername, setTelegramBotUsername] = useState('');
+
+  useEffect(() => {
+    fetch('/api/telegram-bot')
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => setTelegramBotUsername(data?.username || ''))
+      .catch((error) => console.warn('Could not load Telegram bot details:', error));
+  }, []);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -87,20 +94,21 @@ export default function Register() {
       await saveVehicleToFirebase(cleanPlate, {
         name: formData.ownerName || 'Vehicle Owner',
         phone: formData.ownerPhone.trim(),
-        telegramChatId: (formData.telegramChatId || '').trim(),
+        telegramChatId: '',
         make: formData.make,
         model: formData.model,
         color: formData.color,
         year: formData.year,
+        plateDisplay: plate,
       });
 
       console.log("Firestore Write Success!");
 
       // Also call backend API
       const res = await registerVehicle({ 
-        ...formData, 
+        ...formData,
         plate,
-        telegramChatId: (formData.telegramChatId || '').trim() 
+        telegramChatId: '',
       });
       if (res && res.success) {
         setRegisteredResult(res.vehicle);
@@ -253,10 +261,45 @@ export default function Register() {
 
                     <div className="text-left text-on-surface-variant space-y-1 font-body-sm text-body-sm">
                       <p>• Masked Route: {registeredResult.ownerMaskedPhone}</p>
-                      <p>• Telegram: {registeredResult.telegramChatId ? `Chat ID ${registeredResult.telegramChatId}` : 'Not configured'}</p>
+                      <p>• Telegram: Pair your account below to receive alerts in Telegram.</p>
                       <p>• Relay Response: ~30-45s average</p>
                       <p>• Status: 100% Anonymized Civic Proxy</p>
                     </div>
+                  </div>
+
+                  <div className="max-w-lg mx-auto space-y-3">
+                    {(() => {
+                      const cleanPlate = (registeredResult.plate || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+                      const connectUrl = telegramBotUsername
+                        ? `https://t.me/${telegramBotUsername}?start=PLATE_${cleanPlate}`
+                        : null;
+                      return connectUrl ? (
+                        <a
+                          href={connectUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex w-full items-center justify-center gap-2 px-6 py-4 rounded-full bg-primary text-on-primary font-headline-md text-headline-md shadow-[4px_4px_0px_#111827] hover:translate-x-0.5 hover:translate-y-0.5 transition-transform"
+                        >
+                          📲 Connect Telegram for Instant Alerts
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="w-full px-6 py-4 rounded-full bg-surface-container text-on-surface-variant font-headline-md text-headline-md cursor-not-allowed"
+                        >
+                          📲 Connect Telegram for Instant Alerts
+                        </button>
+                      );
+                    })()}
+                    <p className="font-body-sm text-body-sm text-on-surface-variant">
+                      Tap above and hit 'Start' in Telegram to pair your phone automatically without entering numeric IDs.
+                    </p>
+                    {!telegramBotUsername && (
+                      <p className="font-body-sm text-[12px] text-error">
+                        Telegram bot configuration is unavailable. Please try again after the bot is configured.
+                      </p>
+                    )}
                   </div>
 
                   {/* Actions */}
@@ -512,36 +555,6 @@ export default function Register() {
                           <span className="material-symbols-outlined text-[15px]">lock</span>
                           Encrypted on backend. Neither reporters nor public lookups can ever view this.
                         </p>
-                      </div>
-
-                      {/* Telegram Chat ID (For Telegram Bot Alerts) */}
-                      <div className="p-4 rounded-xl bg-surface-container-low border border-on-surface/10 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <label
-                            htmlFor="telegramChatId"
-                            className="block font-label-md text-label-md uppercase text-on-surface"
-                          >
-                            Owner Telegram Chat ID (For Telegram Alerts)
-                          </label>
-                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed">
-                            RECOMMENDED
-                          </span>
-                        </div>
-                        <input
-                          id="telegramChatId"
-                          name="telegramChatId"
-                          type="text"
-                          value={formData.telegramChatId}
-                          onChange={handleChange}
-                          placeholder="e.g. 5839201948"
-                          className="w-full h-12 px-4 rounded-xl bg-surface-container-lowest font-headline-md text-title-md text-on-surface shadow-[2px_2px_0px_#111827] focus:outline-none"
-                        />
-                        <div className="font-body-sm text-[12px] text-on-surface-variant flex items-start gap-1.5 pt-1">
-                          <span className="material-symbols-outlined text-[16px] text-tertiary shrink-0 mt-0.5">info</span>
-                          <span>
-                            Telegram bots deliver to a <strong>Chat ID</strong> (not directly to a phone number). To get your Chat ID: open Telegram, search for <strong>@userinfobot</strong>, tap Start, and paste your numerical ID here.
-                          </span>
-                        </div>
                       </div>
 
                       {/* Relay Notification Toggles */}

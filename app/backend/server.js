@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const twilio = require('twilio');
+const admin = require('firebase-admin');
 
 dotenv.config();
 
@@ -92,6 +93,45 @@ const activeCalls = new Map();
 // Helper to normalize license plates
 function normalizePlate(plate) {
   return plate ? plate.toUpperCase().replace(/[^A-Z0-9\s]/g, '').trim() : '';
+}
+
+function getVehicleDocumentId(plate) {
+  return normalizePlate(plate).replace(/\s+/g, '');
+}
+
+function getFirestore() {
+  if (!admin.apps.length) {
+    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    const credential = serviceAccountJson
+      ? admin.credential.cert(JSON.parse(serviceAccountJson))
+      : admin.credential.applicationDefault();
+    admin.initializeApp({
+      credential,
+      projectId: process.env.FIREBASE_PROJECT_ID || 'callmycar-c3e30',
+    });
+  }
+  return admin.firestore();
+}
+
+async function sendTelegramMessage(chatId, text, parseMode) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || token === 'YOUR_BOT_TOKEN_HERE') {
+    throw new Error('Telegram Bot Token is not configured on the server.');
+  }
+  const telegramRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      ...(parseMode ? { parse_mode: parseMode } : {}),
+    }),
+  });
+  const data = await telegramRes.json();
+  if (!telegramRes.ok || !data.ok) {
+    throw new Error(data.description || 'Failed to send Telegram message');
+  }
+  return data;
 }
 
 // Helper to mask phone numbers for zero-knowledge privacy
@@ -472,67 +512,116 @@ app.post('/api/sms', async (req, res) => {
   }
 });
 
-/**
- * POST /api/telegram-alert
- * Send instant custom alert via Telegram Bot API
- */
-app.post('/api/telegram-alert', async (req, res) => {
-  console.log('Incoming /api/telegram-alert body:', req.body);
+/** Return the configured bot username for the Telegram connect deep link. */
+app.get('/api/telegram-bot', async (_req, res) => {
+  try {
+    await telegramWebhookReady;
+    if (process.env.TELEGRAM_BOT_USERNAME) {
+      return res.json({ success: true, username: process.env.TELEGRAM_BOT_USERNAME.replace(/^@/, '') });
+    }
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (!token || token === 'YOUR_BOT_TOKEN_HERE') {
+      return res.status(503).json({ success: false, error: 'Telegram bot is not configured.' });
+    }
+    const response = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+    const data = await response.json();
+    if (!response.ok || !data.ok || !data.result?.username) {
+      return res.status(503).json({ success: false, error: data.description || 'Could not identify the Telegram bot.' });
+    }
+    return res.json({ success: true, username: data.result.username });
+  } catch (error) {
+    console.error('Telegram bot lookup failed:', error.message);
+    return res.status(503).json({ success: false, error: 'Could not identify the Telegram bot.' });
+  }
+});
 
+/** Pair the Telegram account that opened the vehicle-specific /start deep link. */
+app.post('/api/telegram-webhook', async (req, res) => {
+  const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    return res.status(503).json({ success: false, error: 'Telegram webhook secret is not configured.' });
+  }
+  if (req.get('X-Telegram-Bot-Api-Secret-Token') !== webhookSecret) {
+    return res.status(401).json({ success: false, error: 'Invalid Telegram webhook secret.' });
+  }
+
+  try {
+    const message = req.body?.message;
+    const text = typeof message?.text === 'string' ? message.text.trim() : '';
+    const startMatch = text.match(/^\/start(?:@[A-Za-z0-9_]+)?\s+PLATE_([A-Za-z0-9]+)$/i);
+    if (!startMatch || !message?.from?.id || !message?.chat?.id) {
+      return res.status(200).json({ success: true, ignored: true });
+    }
+
+    const cleanPlate = getVehicleDocumentId(startMatch[1]);
+    const vehicleRef = getFirestore().collection('vehicles').doc(cleanPlate);
+    const vehicleSnapshot = await vehicleRef.get();
+    const replyChatId = message.chat.id;
+    if (!vehicleSnapshot.exists) {
+      await sendTelegramMessage(replyChatId, 'I could not find a registered vehicle for this link. Please register your vehicle first.');
+      return res.status(200).json({ success: true, paired: false });
+    }
+
+    await vehicleRef.set({ telegramChatId: String(message.from.id) }, { merge: true });
+    const vehicle = vehicleSnapshot.data() || {};
+    const displayPlate = vehicle.plateDisplay || vehicle.plate || vehicle.plateNumber || cleanPlate;
+    await sendTelegramMessage(
+      replyChatId,
+      `✅ Vehicle ${displayPlate} successfully linked to this Telegram account! You will now receive instant vehicle alerts here.`
+    );
+    return res.status(200).json({ success: true, paired: true });
+  } catch (error) {
+    console.error('Telegram pairing webhook failed:', error.message);
+    return res.status(500).json({ success: false, error: 'Could not pair Telegram account.' });
+  }
+});
+
+/** Send alerts only to the Telegram account stored on the matching Firestore vehicle. */
+app.post('/api/telegram-alert', async (req, res) => {
   try {
     const body = req.body || {};
     const plateNumber = body.plateNumber || body.licensePlate || '';
-    const customMessage = body.customMessage || body.message || 'Please move your vehicle immediately!';
-    const normalizedPlate = normalizePlate(plateNumber);
-    const cleanPlate = normalizedPlate.replace(/\s+/g, '');
-    const vehicle = normalizedPlate ? VEHICLE_DATABASE[normalizedPlate] : null;
-    const chatId = String(body.chatId || vehicle?.telegramChatId || '').trim();
-
-    if (!plateNumber.trim()) {
-      return res.status(400).json({ success: false, error: 'Vehicle plate number is required.' });
+    if (typeof plateNumber !== 'string' || !plateNumber.trim()) {
+      return res.status(400).json({ success: false, message: 'Vehicle plate number is required.' });
     }
+
+    const cleanPlate = getVehicleDocumentId(plateNumber);
+    const vehicleSnapshot = await getFirestore().collection('vehicles').doc(cleanPlate).get();
+    const vehicle = vehicleSnapshot.exists ? vehicleSnapshot.data() : null;
+    const chatId = vehicle?.telegramChatId;
     if (!chatId) {
-      return res.status(400).json({ success: false, error: 'No Telegram chat ID is registered for this vehicle.' });
+      return res.status(400).json({ success: false, message: 'Owner has not paired Telegram yet.' });
     }
 
-    // Format rich custom message with Markdown
-    const messageText = `🚨 *CALLMYCAR VEHICLE ALERT* 🚨\n\n🚗 *Vehicle:* \`${cleanPlate || 'ALERT'}\`\n💬 *Message:* ${customMessage}\n\n⏰ *Time:* ${new Date().toLocaleTimeString()}`;
-
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    if (!botToken || botToken === 'YOUR_BOT_TOKEN_HERE') {
-      return res.status(500).json({
-        success: false,
-        error: 'Telegram Bot Token is not configured on the server (TELEGRAM_BOT_TOKEN is missing).'
-      });
-    }
-
-    // Using native Node.js fetch (Node 18+) to avoid import duplicate crashes
-    const telegramRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: messageText,
-        parse_mode: 'Markdown'
-      })
-    });
-
-    const data = await telegramRes.json();
-    if (!telegramRes.ok) {
-      console.error('Telegram API rejected send:', data);
-      throw new Error(data.description || 'Failed to send Telegram message');
-    }
-
-    console.log(`Telegram Alert Sent successfully to chat_id [${chatId}]:`, data.ok);
-    return res.status(200).json({ success: true, result: data, targetChatId: chatId });
+    const customMessage = body.customMessage || body.message || 'Please move your vehicle immediately!';
+    const displayPlate = vehicle.plateDisplay || vehicle.plate || vehicle.plateNumber || cleanPlate;
+    const messageText = `🚨 *CALLMYCAR VEHICLE ALERT* 🚨\n\n🚗 *Vehicle:* \`${displayPlate}\`\n💬 *Message:* ${customMessage}\n\n⏰ *Time:* ${new Date().toLocaleTimeString()}`;
+    const result = await sendTelegramMessage(String(chatId), messageText, 'Markdown');
+    return res.status(200).json({ success: true, messageId: result.result?.message_id });
   } catch (error) {
-    console.error('Telegram API Error:', error.message);
-    return res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
+    console.error('Telegram alert failed:', error.message);
+    return res.status(500).json({ success: false, message: error.message || 'Failed to send Telegram message.' });
   }
 });
+
+async function configureTelegramWebhook() {
+  const { TELEGRAM_BOT_TOKEN: token, TELEGRAM_WEBHOOK_URL: url, TELEGRAM_WEBHOOK_SECRET: secret } = process.env;
+  if (!token || !url || !secret || token === 'YOUR_BOT_TOKEN_HERE') return;
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, secret_token: secret, allowed_updates: ['message'] }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.description || 'Telegram rejected webhook configuration.');
+    console.log('Telegram webhook configured.');
+  } catch (error) {
+    console.error('Telegram webhook configuration failed:', error.message);
+  }
+}
+
+const telegramWebhookReady = configureTelegramWebhook();
 
 // Vercel serverless export
 module.exports = app;

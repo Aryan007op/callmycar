@@ -44,6 +44,20 @@ node server.js
 ```
 API running on [http://localhost:3001](http://localhost:3001).
 
+## Telegram Vehicle Pairing
+
+The registration success screen links the owner to the Telegram bot with the vehicle plate embedded in a `/start` deep link. The backend configures the Telegram webhook on startup when `TELEGRAM_WEBHOOK_URL` and `TELEGRAM_WEBHOOK_SECRET` are set.
+
+Configure these backend environment variables in local development and in the deployment environment:
+
+- `TELEGRAM_BOT_TOKEN` from BotFather.
+- `TELEGRAM_WEBHOOK_URL` as the public API URL ending in `/api/telegram-webhook`.
+- `TELEGRAM_WEBHOOK_SECRET` as a private random secret containing letters, numbers, `_`, or `-`.
+- `FIREBASE_PROJECT_ID` and `FIREBASE_SERVICE_ACCOUNT_JSON` for server-side Firestore access. The service account JSON must be kept as a server secret. Local Google Application Default Credentials are also supported.
+- `TELEGRAM_BOT_USERNAME` is optional; when omitted, the backend retrieves it from Telegram using the bot token.
+
+The webhook writes the Telegram chat ID to `vehicles/{cleanPlate}`. Alert delivery reads that document on the backend and returns a pairing-required response until the owner connects Telegram.
+
 ### Option 3: From Root Folder
 ```bash
 npm run dev     # Starts Vite frontend

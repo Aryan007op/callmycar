@@ -4,7 +4,7 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import AICallModal from '../components/AICallModal';
 import { lookupVehicle, initiateCall, sendSms } from '../api/client';
-import { getVehicleFromFirebase, getTelegramDestinationForVehicle } from '../firebase';
+import { getVehicleFromFirebase } from '../firebase';
 
 function maskPhoneNumber(phone) {
   if (!phone) return '+91 •••• ••••••';
@@ -49,16 +49,10 @@ export default function Contact() {
 
       // 1. Fetch from Firestore (saved when user registered)
       let fbData = null;
-      let telegramDestination = null;
       try {
         fbData = await getVehicleFromFirebase(cleanPlate);
       } catch (err) {
         console.warn('Firebase vehicle lookup note:', err);
-      }
-      try {
-        telegramDestination = await getTelegramDestinationForVehicle(cleanPlate);
-      } catch (err) {
-        console.warn('Telegram destination lookup note:', err);
       }
 
       // 2. Fetch from backend lookup
@@ -72,7 +66,7 @@ export default function Contact() {
       if (!isMounted) return;
 
       const registeredPhone = fbData?.phone || backendData?.ownerRealPhone || '';
-      const registeredChatId = telegramDestination?.telegramChatId || fbData?.telegramChatId || backendData?.telegramChatId || '';
+      const registeredChatId = fbData?.telegramChatId || backendData?.telegramChatId || '';
       const vehicleDesc = fbData?.make
         ? `${fbData.color || ''} ${fbData.make} ${fbData.model} (${fbData.year || ''})`.trim()
         : (backendData?.displayName || 'Registered Vehicle');
@@ -168,7 +162,6 @@ export default function Contact() {
   };
 
   const handleSendTelegram = async () => {
-    const destChatId = targetChatId || vehicle.telegramChatId;
     setIsSendingTelegram(true);
     try {
       const response = await fetch('/api/telegram-alert', {
@@ -177,14 +170,13 @@ export default function Contact() {
         body: JSON.stringify({
           plateNumber: vehicle.plate,
           customMessage: messageText || 'Please move your vehicle immediately!',
-          chatId: destChatId ? destChatId.trim() : undefined,
         }),
       });
       const data = await response.json();
       if (data.success) {
-        alert(`Telegram alert sent successfully to ${data.targetChatId ? `Chat ID ${data.targetChatId}` : 'Telegram'}!`);
+        alert('Telegram alert sent successfully!');
       } else {
-        alert(`Telegram Error: ${data.error || 'Failed to send Telegram alert'}`);
+        alert(`Telegram Error: ${data.message || data.error || 'Failed to send Telegram alert'}`);
       }
     } catch (err) {
       console.error('Telegram error:', err);
@@ -662,21 +654,6 @@ export default function Contact() {
                               className="w-full h-10 px-3 rounded-lg bg-surface-container font-mono text-sm text-on-surface border border-on-surface/20 focus:outline-none"
                             />
                           </div>
-                          <div>
-                            <label className="block text-xs font-bold uppercase text-on-surface-variant mb-1">
-                              Target Telegram Chat ID (For Telegram Bot)
-                            </label>
-                            <input
-                              type="text"
-                              value={targetChatId}
-                              onChange={(e) => setTargetChatId(e.target.value)}
-                              placeholder="e.g. 5839201948 (Chat ID from @userinfobot)"
-                              className="w-full h-10 px-3 rounded-lg bg-surface-container font-mono text-sm text-on-surface border border-on-surface/20 focus:outline-none"
-                            />
-                            <p className="text-[11px] text-on-surface-variant mt-1">
-                              Telegram bots deliver to numerical Chat IDs. This vehicle's registered Chat ID is selected automatically; you can edit it here if needed.
-                            </p>
-                          </div>
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-sm">
@@ -687,12 +664,12 @@ export default function Contact() {
                             </span>
                           </div>
                           <div className="p-2.5 bg-surface-container rounded-lg">
-                            <span className="text-xs uppercase text-on-surface-variant block font-bold">Telegram Chat ID:</span>
+                            <span className="text-xs uppercase text-on-surface-variant block font-bold">Telegram pairing:</span>
                             <span className="font-mono text-on-surface font-semibold">
                               {targetChatId || vehicle.telegramChatId ? (
-                                <span className="text-tertiary">ID: {targetChatId || vehicle.telegramChatId}</span>
+                                <span className="text-tertiary">Owner paired</span>
                               ) : (
-                                <span className="text-on-surface-variant">Default server channel</span>
+                                <span className="text-on-surface-variant">Not paired</span>
                               )}
                             </span>
                           </div>
@@ -700,7 +677,7 @@ export default function Contact() {
                       )}
 
                       <div className="text-[11px] text-on-surface-variant">
-                        Each registered vehicle delivers alerts to its own owner phone number and Telegram Chat ID.
+                        Telegram alerts go to the account paired by this vehicle's owner.
                       </div>
                     </div>
 
