@@ -1,5 +1,6 @@
-// Route frontend API requests directly to the active local Cloudflare Tunnel.
-const BASE_URL = 'https://feof-projectors-whilst-elsewhere.trycloudflare.com';
+// Active Cloudflare Quick Tunnel for the local WhatsApp backend. This URL changes
+// if the Quick Tunnel is restarted; keep Vercel deployments in sync with it.
+const BASE_URL = 'https://accommodations-utah-gifts-unique.trycloudflare.com';
 export const apiUrl = (path) => `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 
 export async function registerVehicle(vehicleData) {
@@ -151,6 +152,20 @@ export async function sendSms({ plate, message, phone }) {
 
 // Alias retained for callers that use the alert-specific API name.
 export const sendSmsAlert = sendSms;
+
+export async function sendAssistantReport({ plateNumber, issue = 'blocking my car', urgency = 'standard' }) {
+  try {
+    const res = await fetch(apiUrl('/api/assistant-report'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plateNumber, issue, urgency }),
+    });
+    const data = await res.json().catch(() => ({}));
+    return res.ok ? data : { ...data, success: false };
+  } catch (err) {
+    return { success: false, fulfillmentText: err.message || 'Could not reach CallMyCar.' };
+  }
+}
 
 export async function sendTelegramAlert({ plate, message, chatId }) {
   try {
