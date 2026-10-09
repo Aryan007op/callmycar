@@ -1,8 +1,10 @@
-const BACKEND_URL = '';
+// Route frontend API requests directly to the active local Cloudflare Tunnel.
+const BASE_URL = 'https://feof-projectors-whilst-elsewhere.trycloudflare.com';
+export const apiUrl = (path) => `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 
 export async function registerVehicle(vehicleData) {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/register`, {
+    const res = await fetch(apiUrl('/api/register'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(vehicleData),
@@ -30,7 +32,7 @@ export async function registerVehicle(vehicleData) {
 
 export async function lookupVehicle(plate, state = 'NY') {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/lookup`, {
+    const res = await fetch(apiUrl('/api/lookup'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ plate, state }),
@@ -58,7 +60,7 @@ export async function lookupVehicle(plate, state = 'NY') {
 
 export async function initiateCall({ plate, issue, urgency = 'urgent', ai_mode = 'bot', phone }) {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/call`, {
+    const res = await fetch(apiUrl('/api/call'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ plate, issue, urgency, ai_mode, phone }),
@@ -80,7 +82,7 @@ export async function initiateCall({ plate, issue, urgency = 'urgent', ai_mode =
 
 export async function getCallStatus(callId, elapsedSeconds = 0) {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/status/${callId}`);
+    const res = await fetch(apiUrl(`/api/status/${callId}`));
     if (res.ok) {
       return await res.json();
     }
@@ -124,7 +126,7 @@ export async function sendSms({ plate, message, phone }) {
     // Sanitize plate number (remove spaces, special chars)
     const cleanPlate = (plate || '').replace(/\s+/g, '').toUpperCase();
     
-    const res = await fetch(`${BACKEND_URL}/api/sms`, {
+    const res = await fetch(apiUrl('/api/sms'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -133,25 +135,27 @@ export async function sendSms({ plate, message, phone }) {
         phone: phone || '',
       }),
     });
-    if (res.ok) {
-      return await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.success === false) {
+      return {
+        success: false,
+        error: data.error || data.message || `WhatsApp request failed with status ${res.status}.`,
+      };
     }
+    return data;
   } catch (err) {
-    console.warn('Backend unavailable, using fallback SMS response:', err);
+    console.warn('WhatsApp backend request failed:', err);
+    return { success: false, error: err.message || 'WhatsApp service is unavailable.' };
   }
-
-  return {
-    success: true,
-    sid: `mock_sms_${Date.now()}`,
-    status: 'delivered',
-    message: `Encrypted SMS alert dispatched successfully to the owner of ${plate}!`,
-  };
 }
+
+// Alias retained for callers that use the alert-specific API name.
+export const sendSmsAlert = sendSms;
 
 export async function sendTelegramAlert({ plate, message, chatId }) {
   try {
     const cleanPlate = (plate || '').replace(/\s+/g, '').toUpperCase();
-    const res = await fetch(`${BACKEND_URL}/api/telegram-alert`, {
+    const res = await fetch(apiUrl('/api/telegram-alert'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
