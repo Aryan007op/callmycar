@@ -1,0 +1,19 @@
+services:
+  callmycar-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: callmycar-backend
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      WHATSAPP_AUTH_PATH: /var/data/.wwebjs_auth
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+    ports:
+      - "3001:3001"
+    volumes:
+      - ${WHATSAPP_DATA_DIR:-/srv/callmycar-data}:/var/data

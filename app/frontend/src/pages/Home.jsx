@@ -66,7 +66,7 @@ export default function Home() {
 
   const handleQuickAlert = (issueName) => {
     const cleanPlate = plate.trim() || 'AA 1234';
-    setToastMessage(`Civic alert dispatched to ${cleanPlate}: "${issueName}"`);
+    setToastMessage(`Alert sent to ${cleanPlate}: "${issueName}"`);
     setShowToast(true);
     setTimeout(() => {
       setShowToast(false);
@@ -113,10 +113,10 @@ export default function Home() {
     <div className="bg-background min-h-screen font-body-md text-on-surface">
       <Header currentPath="how-it-works" />
 
-      <main className="w-full pt-20 bg-background">
+      <main className="w-full pt-16 sm:pt-20 bg-background overflow-x-hidden">
         <div className="flex flex-col w-full">
           {/* HERO SECTION: Lavender neo-brutalist playground */}
-          <section className="relative w-full bg-secondary-fixed pt-16 pb-24 overflow-hidden">
+          <section className="relative w-full bg-secondary-fixed py-12 sm:pt-16 sm:pb-24 overflow-hidden">
             {/* Playful Background Doodles / Ambient Grid Elements */}
             <div className="absolute inset-0 pointer-events-none opacity-30">
               <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
@@ -129,23 +129,16 @@ export default function Home() {
               </svg>
             </div>
 
-            <div className="relative max-w-[1200px] mx-auto px-6 lg:px-10 z-10">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            <div className="relative max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-10 z-10">
+              <div className="grid grid-cols-1 gap-8 lg:gap-12 items-center">
                 {/* Hero Text Content */}
-                <div className="lg:col-span-7 space-y-6">
-                  <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-surface-container-lowest text-on-surface shadow-[3px_3px_0px_#141b2b]">
-                    <span className="w-2.5 h-2.5 rounded-full bg-tertiary-container animate-ping"></span>
-                    <span className="font-label-md text-label-md uppercase tracking-wider">
-                      Civic Accountability 2.0
-                    </span>
-                  </div>
-
-                  <h1 className="font-display-hero text-display-hero text-surface-container-lowest drop-shadow-[4px_4px_0px_#141b2b] tracking-tight">
+                <div className="w-full max-w-4xl space-y-6">
+                  <h1 className="font-display-hero text-[44px] leading-tight sm:text-display-hero text-[#1d4ed8] tracking-tight">
                     CallMyCar
                   </h1>
 
                   <p className="font-headline-md text-headline-md text-on-surface max-w-xl leading-snug">
-                    A civic-minded vehicle management platform. Improving communication and accountability on the roads.
+                    A simple way to contact a vehicle owner when their car needs attention.
                   </p>
 
                   <div className="pt-4 flex flex-wrap items-center gap-4">
@@ -165,76 +158,22 @@ export default function Home() {
                     </a>
                   </div>
 
-                  {/* Micro Metric Highlights */}
-                  <div className="pt-6 grid grid-cols-3 gap-4 max-w-lg">
-                    <div className="p-3 bg-surface-container-lowest rounded-xl shadow-[3px_3px_0px_#141b2b]">
+                  <div className="pt-6 grid grid-cols-1 min-[380px]:grid-cols-3 gap-3 sm:gap-4 max-w-lg">
+                    <div className="p-3 bg-surface-container-lowest rounded-xl shadow-[3px_3px_0px_#141b2b] text-center">
                       <div className="font-headline-md text-headline-md text-secondary">0 sec</div>
-                      <div className="font-body-sm text-body-sm text-on-surface-variant">
-                        Phone privacy revealed
-                      </div>
+                      <div className="font-body-sm text-body-sm text-on-surface-variant">Phone privacy revealed</div>
                     </div>
-                    <div className="p-3 bg-surface-container-lowest rounded-xl shadow-[3px_3px_0px_#141b2b]">
+                    <div className="p-3 bg-surface-container-lowest rounded-xl shadow-[3px_3px_0px_#141b2b] text-center">
                       <div className="font-headline-md text-headline-md text-tertiary">94.8%</div>
-                      <div className="font-body-sm text-body-sm text-on-surface-variant">
-                        Towing avoided
-                      </div>
+                      <div className="font-body-sm text-body-sm text-on-surface-variant">Towing avoided</div>
                     </div>
-                    <div className="p-3 bg-surface-container-lowest rounded-xl shadow-[3px_3px_0px_#141b2b]">
+                    <div className="p-3 bg-surface-container-lowest rounded-xl shadow-[3px_3px_0px_#141b2b] text-center">
                       <div className="font-headline-md text-headline-md text-primary">120k+</div>
-                      <div className="font-body-sm text-body-sm text-on-surface-variant">
-                        Civic drivers enrolled
-                      </div>
+                      <div className="font-body-sm text-body-sm text-on-surface-variant">Civic drivers enrolled</div>
                     </div>
                   </div>
                 </div>
 
-                {/* Robot / Civic Companion Illustration Module */}
-                <div className="lg:col-span-5 relative flex justify-center">
-                  <div className="relative w-full max-w-md bg-surface-container-lowest rounded-2xl p-6 shadow-[6px_6px_0px_#141b2b] overflow-hidden">
-                    <div className="flex items-center justify-between pb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-error"></span>
-                        <span className="w-3 h-3 rounded-full bg-primary-container"></span>
-                        <span className="w-3 h-3 rounded-full bg-tertiary-container"></span>
-                      </div>
-                      <span className="font-label-md text-label-md text-on-surface-variant uppercase">
-                        Civic Bot Sentinel v2.4
-                      </span>
-                    </div>
-
-                    <div className="relative w-full h-80 rounded-xl overflow-hidden bg-secondary-container flex items-center justify-center">
-                      <img
-                        className="w-full h-full object-cover"
-                        alt="Retro-futuristic isometric 3D robot guardian"
-                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuD0xQ0OhtjPcdhTYip_0upExooZoWYxQH26W-qhJAx2pXmdTlJvwoEtdPbTQfRZ3o_db0JoqUXLRPNiw-EruZ1UxOi3F4ljL3cJ94Ub0ENS_9eIBmoZxHUceoGA31b04aVjFDYIk7a74dvYS_6Pxb_WAWZRhtCidE5ynYlfwYW1dElFJ2Z2lRRpNKcaFkDiXXYbwwtHyhxFh1C98eG4CAvEm16GYpjK7PTq00dJgH6ojQlEshmz2Ww"
-                      />
-                      {/* Floating Tag */}
-                      <div className="absolute bottom-3 left-3 right-3 bg-surface-container-lowest/95 backdrop-blur-sm p-3 rounded-lg shadow-[3px_3px_0px_#141b2b] flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-secondary text-[22px]">
-                            smart_toy
-                          </span>
-                          <span className="font-title-md text-title-md text-on-surface">
-                            Auto-Relay Guardian
-                          </span>
-                        </div>
-                        <span className="px-2 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-label-md text-label-md">
-                          ACTIVE
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 pt-3 flex items-center justify-between text-on-surface-variant font-body-sm text-body-sm">
-                      <span className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[16px] text-tertiary">
-                          check_circle
-                        </span>{' '}
-                        End-to-end encrypted
-                      </span>
-                      <span>Civic Guard Ready</span>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -255,7 +194,7 @@ export default function Home() {
 
           {/* SUNNY YELLOW ACTION DECK */}
           <section className="relative w-full bg-primary-container pt-8 pb-20">
-            <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
+            <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-10">
               <div className="max-w-3xl mx-auto mb-16 rounded-2xl bg-surface-container-lowest p-6 sm:p-8 shadow-[6px_6px_0px_#141b2b]" aria-labelledby="voice-report-title">
                 <div className="text-center space-y-2 mb-5">
                   <h2 id="voice-report-title" className="font-headline-md text-headline-md text-on-surface">Report a blocking vehicle by voice</h2>
@@ -271,74 +210,14 @@ export default function Home() {
                 <p className="mt-3 text-center text-xs text-on-surface-variant">Google Assistant cannot currently pass a spoken plate directly to websites. Use the microphone here; voice recognition may require browser permission.</p>
               </div>
               {/* Split Showcase: Isometric Parking Scene + Editorial Story */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-                {/* Isometric Visual Canvas */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+                {/* Parking example image supplied by the user */}
                 <div className="lg:col-span-7">
-                  <div className="relative bg-surface-container-lowest rounded-2xl p-6 shadow-[6px_6px_0px_#141b2b]">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <span className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-headline-md text-title-md">
-                          P
-                        </span>
-                        <div>
-                          <div className="font-headline-md text-title-md text-on-surface leading-none">
-                            Elm Street Bay #4
-                          </div>
-                          <div className="font-body-sm text-body-sm text-on-surface-variant">
-                            Live civic monitoring zone
-                          </div>
-                        </div>
-                      </div>
-                      <span className="px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-md text-label-md">
-                        OCCUPIED
-                      </span>
-                    </div>
-
-                    {/* Isometric Scene Visual */}
-                    <div className="relative w-full h-96 rounded-xl overflow-hidden bg-surface-container">
-                      <img
-                        className="w-full h-full object-cover"
-                        alt="Isometric retro-tech urban parking lot"
-                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuAA4PpfRVgFHVrdEv1wCMyEIxnHwDNTviFaATBK4oUpTi9fj_-gqRJPt1fpsFbOg5Bvh5C0HZSC0NZrrHZo4EquMdc8CCwMl9qBXO_WoINwAxfdNk-XuqU9pYd3usCqAkTs8BOZXwdU0gGY8rgiPW7lT7OH2ZThfHC3FlzSs8XQbndqJ_yrsn2PQl5yi8tVzsEOuQiPB6KqYrQ2taOalxmb_ZT6Sq0sfHZ1lrKa5M6OdjjPFZCGvjE"
-                      />
-                      {/* Tactical Interactive Overlay Markers */}
-                      <div className="absolute top-8 left-8 bg-surface-container-lowest p-2.5 rounded-xl shadow-[3px_3px_0px_#141b2b] flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-error animate-pulse"></span>
-                        <span className="font-label-md text-label-md text-on-surface">
-                          Hazard lights blinking
-                        </span>
-                      </div>
-                      <div className="absolute bottom-6 right-6 bg-surface-container-lowest p-3 rounded-xl shadow-[3px_3px_0px_#141b2b] max-w-xs">
-                        <div className="flex items-center gap-2 text-tertiary mb-1">
-                          <span className="material-symbols-outlined text-[18px]">verified</span>
-                          <span className="font-label-md text-label-md uppercase">
-                            1-Tap Neighbor Prompt
-                          </span>
-                        </div>
-                        <p className="font-body-sm text-body-sm text-on-surface">
-                          "Hey neighbor, your sunroof is cracked open and heavy rain is incoming!"
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Footnote Action Strip */}
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 pt-2">
-                      <div className="flex items-center gap-3">
-                        <span className="px-2.5 py-1 rounded-md bg-secondary-container text-on-secondary-container font-label-md text-label-md">
-                          PARKING ZONE A-12
-                        </span>
-                        <span className="font-body-sm text-body-sm text-on-surface-variant">
-                          Tow-Free Neighborhood Certified
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 text-on-surface font-title-md text-label-lg">
-                        <span className="material-symbols-outlined text-[18px] text-tertiary">
-                          shield
-                        </span>{' '}
-                        Identity 100% Masked
-                      </div>
-                    </div>
-                  </div>
+                  <img
+                    className="block h-auto w-full"
+                    alt="Parking example showing cars in a neighborhood lot and a private contact message"
+                    src="/parking-example.jpg"
+                  />
                 </div>
 
                 {/* Editorial Feature Copy */}
@@ -351,16 +230,13 @@ export default function Home() {
                   </div>
 
                   <h2 className="font-display-hero text-headline-lg text-on-surface drop-shadow-[2px_2px_0px_#ffffff] leading-tight">
-                    The future of <br className="hidden sm:inline" />
-                    civic sense
+                    A simple way to reach a driver
                   </h2>
 
                   <p className="font-body-lg text-body-lg text-on-surface leading-relaxed">
-                    Connect with vehicle owners responsibly. Found a car blocking your way or in need
-                    of immediate attention? With{' '}
-                    <strong className="font-title-md text-on-surface">CallMyCar</strong>, you can
-                    send anonymous, courteous notifications for better civic management. Make a
-                    difference in your community before calling enforcement.
+                    If a parked car is blocking you or needs attention, use{' '}
+                    <strong className="font-title-md text-on-surface">CallMyCar</strong> to send its
+                    owner a message. Your phone number is not shown to them.
                   </p>
 
                   {/* Core Value Cards */}
@@ -373,11 +249,10 @@ export default function Home() {
                       </div>
                       <div>
                         <h3 className="font-title-md text-title-md text-on-surface">
-                          Zero Personal Data Exchange
+                          Keep your number private
                         </h3>
                         <p className="font-body-sm text-body-sm text-on-surface-variant">
-                          Neither driver nor notifier ever views phone numbers, email addresses, or
-                          home registration info.
+                          The person receiving your alert does not see your phone number.
                         </p>
                       </div>
                     </div>
@@ -390,11 +265,10 @@ export default function Home() {
                       </div>
                       <div>
                         <h3 className="font-title-md text-title-md text-on-surface">
-                          Curated Civic Templates
+                          Suggested messages
                         </h3>
                         <p className="font-body-sm text-body-sm text-on-surface-variant">
-                          Select from anti-harassment pre-approved prompts: blocking driveway,
-                          headlights left on, or street sweeper warning.
+                          Choose a message for a blocked driveway, lights left on, or a nearby street cleaning.
                         </p>
                       </div>
                     </div>
@@ -410,7 +284,7 @@ export default function Home() {
                       Enter Vehicle Number Plate:
                     </h2>
                     <p className="font-body-md text-body-md text-on-surface-variant max-w-lg mx-auto">
-                      Look up any enrolled vehicle to broadcast a safe, standardized civic alert in under 30 seconds.
+                      Enter a plate to see whether the vehicle is registered and send its owner a message.
                     </p>
                   </div>
 
@@ -478,7 +352,7 @@ export default function Home() {
                           <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none opacity-40">
                             <span className="material-symbols-outlined text-[24px]">pin</span>
                           </div>
-                          <div className="flex items-center gap-2 pl-12 pr-4 h-16">
+                          <div className="flex items-center gap-1 sm:gap-2 pl-10 sm:pl-12 pr-2 sm:pr-4 h-16 min-w-0">
                             <input
                               id="plate-state"
                               type="text"
@@ -486,7 +360,7 @@ export default function Home() {
                               value={plateSegments.state}
                               onChange={(e) => updateSegment('state', e.target.value)}
                               readOnly
-                              className="w-14 h-12 text-center bg-surface-container font-code-plate text-code-plate text-on-surface uppercase tracking-widest shadow-[2px_2px_0px_#141b2b] rounded-lg focus:outline-none"
+                              className="w-10 sm:w-14 h-12 shrink-0 text-center bg-surface-container font-code-plate text-[18px] sm:text-code-plate text-on-surface uppercase tracking-wider sm:tracking-widest shadow-[2px_2px_0px_#141b2b] rounded-lg focus:outline-none"
                             />
                             <span className="text-on-surface-variant text-lg font-bold"> </span>
                             <input
@@ -496,7 +370,7 @@ export default function Home() {
                               value={plateSegments.district}
                               onChange={(e) => updateSegment('district', e.target.value)}
                               placeholder="01"
-                              className="w-14 h-12 text-center bg-surface-bright font-code-plate text-code-plate text-on-surface uppercase tracking-widest shadow-[2px_2px_0px_#141b2b] rounded-lg focus:outline-none focus:bg-surface-container-low transition-colors"
+                              className="w-10 sm:w-14 h-12 shrink-0 text-center bg-surface-bright font-code-plate text-[18px] sm:text-code-plate text-on-surface uppercase tracking-wider sm:tracking-widest shadow-[2px_2px_0px_#141b2b] rounded-lg focus:outline-none focus:bg-surface-container-low transition-colors"
                             />
                             <span className="text-on-surface-variant text-lg font-bold"> </span>
                             <input
@@ -506,7 +380,7 @@ export default function Home() {
                               value={plateSegments.series}
                               onChange={(e) => updateSegment('series', e.target.value)}
                               placeholder="AB"
-                              className="w-14 h-12 text-center bg-surface-bright font-code-plate text-code-plate text-on-surface uppercase tracking-widest shadow-[2px_2px_0px_#141b2b] rounded-lg focus:outline-none focus:bg-surface-container-low transition-colors"
+                              className="w-10 sm:w-14 h-12 shrink-0 text-center bg-surface-bright font-code-plate text-[18px] sm:text-code-plate text-on-surface uppercase tracking-wider sm:tracking-widest shadow-[2px_2px_0px_#141b2b] rounded-lg focus:outline-none focus:bg-surface-container-low transition-colors"
                             />
                             <span className="text-on-surface-variant text-lg font-bold"> </span>
                             <input
@@ -516,7 +390,7 @@ export default function Home() {
                               value={plateSegments.number}
                               onChange={(e) => updateSegment('number', e.target.value)}
                               placeholder="1234"
-                              className="w-24 h-12 text-center bg-surface-bright font-code-plate text-code-plate text-on-surface uppercase tracking-widest shadow-[2px_2px_0px_#141b2b] rounded-lg focus:outline-none focus:bg-surface-container-low transition-colors"
+                              className="w-[68px] sm:w-24 h-12 shrink-0 text-center bg-surface-bright font-code-plate text-[18px] sm:text-code-plate text-on-surface uppercase tracking-wider sm:tracking-widest shadow-[2px_2px_0px_#141b2b] rounded-lg focus:outline-none focus:bg-surface-container-low transition-colors"
                             />
                           </div>
                         </div>
@@ -547,27 +421,6 @@ export default function Home() {
                           className="px-3 py-1 rounded-full bg-surface-container font-label-md text-label-md text-on-surface shadow-[2px_2px_0px_#141b2b] hover:bg-secondary-fixed transition-colors"
                         >
                           MH • MH 02 CZ 9999
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectDemoPlate('KA', 'KA 03 MX 4020')}
-                          className="px-3 py-1 rounded-full bg-surface-container font-label-md text-label-md text-on-surface shadow-[2px_2px_0px_#141b2b] hover:bg-secondary-fixed transition-colors"
-                        >
-                          KA • KA 03 MX 4020
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectDemoPlate('HR', 'HR 26 DK 8888')}
-                          className="px-3 py-1 rounded-full bg-surface-container font-label-md text-label-md text-on-surface shadow-[2px_2px_0px_#141b2b] hover:bg-secondary-fixed transition-colors"
-                        >
-                          HR • HR 26 DK 8888
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectDemoPlate('UP', 'UP 16 BK 5555')}
-                          className="px-3 py-1 rounded-full bg-surface-container font-label-md text-label-md text-on-surface shadow-[2px_2px_0px_#141b2b] hover:bg-secondary-fixed transition-colors"
-                        >
-                          UP • UP 16 BK 5555
                         </button>
                       </div>
 
@@ -711,18 +564,18 @@ export default function Home() {
           </section>
 
           {/* HOW IT WORKS BENTO GRID */}
-          <section className="w-full bg-surface-container-low py-20" id="how-it-works">
-            <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
+          <section className="w-full bg-surface-container-low py-12 sm:py-20" id="how-it-works">
+            <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-10">
               <div className="text-center space-y-3 mb-16">
                 <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-label-md text-label-md shadow-[2px_2px_0px_#141b2b]">
                   <span className="material-symbols-outlined text-[16px]">bolt</span>
                   <span>Three Simple Steps</span>
                 </div>
                 <h2 className="font-headline-lg text-headline-lg text-on-surface tracking-tight">
-                  How CallMyCar Bridges The Neighborhood
+                  How it works
                 </h2>
                 <p className="font-body-lg text-body-lg text-on-surface-variant max-w-xl mx-auto">
-                  Replacing angry notes under wiper blades with safe, modern digital civility.
+                  Look up a plate, choose what to say, and send the owner a message.
                 </p>
               </div>
 
@@ -742,7 +595,7 @@ export default function Home() {
                   </div>
                   <div className="mt-8 pt-4 border-t border-on-surface/10 flex items-center gap-2 text-tertiary font-label-md text-label-md">
                     <span className="material-symbols-outlined text-[18px]">qr_code_scanner</span>
-                    <span>Instant recognition</span>
+                    <span>Check the plate</span>
                   </div>
                 </div>
 
@@ -756,13 +609,12 @@ export default function Home() {
                       Pick Pre-Made Notice
                     </h3>
                     <p className="font-body-md text-body-md text-on-surface-variant">
-                      Select an automated courtesy prompt. Our strict community guardrails eliminate
-                      hostility, harassment, or verbal street conflicts.
+                      Choose a suggested message or write your own.
                     </p>
                   </div>
                   <div className="mt-8 pt-4 border-t border-on-surface/10 flex items-center gap-2 text-secondary font-label-md text-label-md">
                     <span className="material-symbols-outlined text-[18px]">verified_user</span>
-                    <span>Toxicity-free protocol</span>
+                    <span>Keep it polite</span>
                   </div>
                 </div>
 
@@ -773,16 +625,15 @@ export default function Home() {
                       03
                     </div>
                     <h3 className="font-headline-md text-headline-md text-on-surface">
-                      Immediate Push Alert
+                      The owner gets an alert
                     </h3>
                     <p className="font-body-md text-body-md text-on-surface-variant">
-                      The driver receives an instant push, voice call, or SMS ping. They can tap "On my
-                      way! 2 mins" to resolve the situation before fines or tows happen.
+                      The owner receives your message using the contact method available for their vehicle.
                     </p>
                   </div>
                   <div className="mt-8 pt-4 border-t border-on-surface/10 flex items-center gap-2 text-primary font-label-md text-label-md">
                     <span className="material-symbols-outlined text-[18px]">speed</span>
-                    <span>Under 60s response</span>
+                    <span>Message sent to the owner</span>
                   </div>
                 </div>
               </div>
@@ -790,19 +641,18 @@ export default function Home() {
           </section>
 
           {/* CIVIC COMMUNITY PLEDGE BANNER */}
-          <section className="w-full bg-tertiary-container py-14">
-            <div className="max-w-[1200px] mx-auto px-6 lg:px-10 flex flex-col md:flex-row items-center justify-between gap-6">
+          <section className="w-full bg-on-surface py-14">
+            <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-10 flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-2xl bg-surface-container-lowest flex items-center justify-center text-on-surface shadow-[3px_3px_0px_#141b2b] shrink-0">
                   <span className="material-symbols-outlined text-tertiary text-[32px]">favorite</span>
                 </div>
                 <div>
-                  <h3 className="font-headline-md text-headline-md text-on-tertiary-container">
-                    Join Over 120,000 Neighborly Drivers
+                  <h3 className="font-headline-md text-headline-md text-white">
+                    Need to reach a vehicle owner?
                   </h3>
-                  <p className="font-body-sm text-body-sm text-on-tertiary-container/80">
-                    Every alert sent is one fewer towing invoice, fewer disputes, and a safer street
-                    for everybody.
+                  <p className="font-body-sm text-body-sm text-white/75">
+                    Look up the plate and send a clear message about the issue.
                   </p>
                 </div>
               </div>

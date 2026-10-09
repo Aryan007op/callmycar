@@ -58,6 +58,12 @@ Configure these backend environment variables in local development and in the de
 
 The webhook writes the Telegram chat ID to `vehicles/{cleanPlate}`. Alert delivery reads that document on the backend and returns a pairing-required response until the owner connects Telegram.
 
+## WhatsApp Delivery Setup
+
+The WhatsApp button sends through WhatsApp Web. Start the backend on a persistent machine and scan the QR code printed in its terminal on first run. The linked session is saved on the persistent auth path so it remains authenticated after restarts. The `/api/whatsapp-status` endpoint reports whether the session is ready.
+
+Vercel serverless cannot keep the browser or authentication session alive. For AWS, use the EC2 + persistent EBS setup in [`app/backend/AWS_DEPLOY.md`](app/backend/AWS_DEPLOY.md) and [`app/backend/docker-compose.aws.yml`](app/backend/docker-compose.aws.yml). Scan the backend's QR once, then set frontend build variable `VITE_BACKEND_URL` in the frontend host to the backend's public HTTPS URL and redeploy the frontend. Leave it blank for local development through the Vite proxy. Twilio credentials are still used by the separate voice-call features, but WhatsApp alerts do not fall back to Twilio.
+
 ### Option 3: From Root Folder
 ```bash
 npm run dev     # Starts Vite frontend

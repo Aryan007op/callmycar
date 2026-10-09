@@ -52,6 +52,7 @@ coverage/
 .wwebjs_cache/
 **/.wwebjs_auth/
 **/.wwebjs_cache/
+app/backend/cloudflared.exe
 
 # WhatsApp session/cache
 .wwebjs_auth/

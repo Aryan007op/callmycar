@@ -22,6 +22,7 @@ export const saveVehicleToFirebase = async (plateNumber, ownerData) => {
     plateDisplay: ownerData.plateDisplay || plateNumber.trim().toUpperCase(),
     ownerName: ownerData.name || ownerData.ownerName || "Vehicle Owner",
     phone: ownerData.phone || "",
+    emergencyContact: ownerData.emergencyContact || "",
     telegramChatId: ownerData.telegramChatId || "",
     make: ownerData.make || "",
     model: ownerData.model || "",

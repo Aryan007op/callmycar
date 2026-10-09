@@ -3,7 +3,7 @@ import { useParams, useSearchParams, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import AICallModal from '../components/AICallModal';
-import { lookupVehicle, initiateCall, sendSms } from '../api/client';
+import { apiUrl, lookupVehicle, initiateCall, sendSms } from '../api/client';
 import { getVehicleFromFirebase } from '../firebase';
 
 function maskPhoneNumber(phone) {
@@ -36,6 +36,7 @@ export default function Contact() {
   });
   const [smsFeedback, setSmsFeedback] = useState('');
   const [targetPhone, setTargetPhone] = useState('');
+  const [emergencyContact, setEmergencyContact] = useState('');
   const [targetChatId, setTargetChatId] = useState('');
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [isSendingTelegram, setIsSendingTelegram] = useState(false);
@@ -66,6 +67,7 @@ export default function Contact() {
       if (!isMounted) return;
 
       const registeredPhone = fbData?.phone || backendData?.ownerRealPhone || '';
+      const registeredEmergencyContact = fbData?.emergencyContact || backendData?.emergencyContact || '';
       const registeredChatId = fbData?.telegramChatId || backendData?.telegramChatId || '';
       const vehicleDesc = fbData?.make
         ? `${fbData.color || ''} ${fbData.make} ${fbData.model} (${fbData.year || ''})`.trim()
@@ -80,12 +82,14 @@ export default function Contact() {
         registered: true,
         verified: true,
         ownerRealPhone: registeredPhone,
+        emergencyContact: registeredEmergencyContact,
         ownerMaskedPhone: registeredPhone ? maskPhoneNumber(registeredPhone) : (backendData?.ownerMaskedPhone || '+91 •••• ••••••'),
         telegramChatId: registeredChatId,
       };
 
       setVehicle(merged);
       setTargetPhone(registeredPhone);
+      setEmergencyContact(registeredEmergencyContact);
       setTargetChatId(registeredChatId);
     };
 
@@ -94,6 +98,10 @@ export default function Contact() {
   }, [plate, stateParam]);
 
   const presetTemplates = [
+    {
+      title: '🚨 Emergency',
+      text: 'EMERGENCY: Your vehicle needs immediate attention. Please contact the person reporting this alert as soon as possible.',
+    },
     {
       title: '🚗 Blocking Driveway',
       text: 'Hey neighbor, your car is currently blocking my driveway. Could you please move it when free? Thanks!',
@@ -139,6 +147,11 @@ export default function Contact() {
       alert('Please enter or register a recipient phone number first.');
       return;
     }
+    const isEmergency = selectedTemplate === '🚨 Emergency';
+    if (isEmergency && !emergencyContact) {
+      alert('This vehicle does not have an emergency contact registered.');
+      return;
+    }
     setIsSendingWhatsApp(true);
     try {
       const res = await sendSms({
@@ -146,10 +159,23 @@ export default function Contact() {
         message: messageText,
         phone: destPhone,
       });
-      if (res && res.error) {
-        alert(`WhatsApp error: ${res.error}`);
+      if (!res?.success || res.error) {
+        alert(`WhatsApp error: ${res?.error || 'The server did not confirm that the alert was accepted.'}`);
       } else {
-        setSmsFeedback(`Encrypted WhatsApp alert dispatched successfully to ${destPhone}!`);
+        if (isEmergency) {
+          const emergencyRes = await sendSms({
+            plate: vehicle.plate,
+            message: messageText,
+            phone: emergencyContact,
+          });
+          if (!emergencyRes?.success || emergencyRes.error) {
+            alert(`Owner was alerted, but the emergency contact message failed: ${emergencyRes?.error || 'delivery was not confirmed.'}`);
+            return;
+          }
+          setSmsFeedback(`Emergency WhatsApp alerts accepted for the owner and emergency contact (${emergencyContact}).`);
+        } else {
+          setSmsFeedback(`WhatsApp alert accepted by the provider for ${destPhone}${res.status ? ` (status: ${res.status})` : ''}.`);
+        }
         setTimeout(() => {
           setSmsFeedback('');
         }, 4500);
@@ -164,7 +190,7 @@ export default function Contact() {
   const handleSendTelegram = async () => {
     setIsSendingTelegram(true);
     try {
-      const response = await fetch('/api/telegram-alert', {
+      const response = await fetch(apiUrl('/api/telegram-alert'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -190,11 +216,11 @@ export default function Contact() {
     <div className="bg-background min-h-screen font-body-md text-on-surface">
       <Header currentPath="how-it-works" />
 
-      <main className="w-full pt-20 bg-background">
+      <main className="w-full pt-16 sm:pt-20 bg-background overflow-x-hidden">
         <div className="flex flex-col w-full">
           {/* Top Scallop / Organic Wave Transition from Lavender to Canary Yellow */}
           <div className="w-full bg-secondary-container relative">
-            <div className="max-w-[1200px] mx-auto px-6 lg:px-10 pt-8 pb-12 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-10 pt-6 sm:pt-8 pb-10 sm:pb-12 flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
               {/* Step Tracker Breadcrumb */}
               <div className="flex items-center flex-wrap gap-2 text-on-surface">
                 <Link
@@ -259,7 +285,7 @@ export default function Contact() {
           </div>
 
           {/* Main Canvas: Neo-Brutalist Sunny Canary Yellow Theme */}
-          <div className="w-full bg-primary-container px-6 lg:px-10 pb-24 pt-2">
+          <div className="w-full bg-primary-container px-4 sm:px-6 lg:px-10 pb-14 sm:pb-24 pt-2">
             <div className="max-w-[1200px] mx-auto flex flex-col gap-10">
               {/* Verified Vehicle Banner Card */}
               <div className="w-full bg-surface-container-lowest rounded-lg p-6 lg:p-8 shadow-[4px_4px_0px_#111827] flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative overflow-hidden">
@@ -318,51 +344,6 @@ export default function Contact() {
                 </div>
               </div>
 
-              {/* TEMP: Vehicle Debug Panel */}
-              <div className="w-full bg-error-container/10 border-2 border-error rounded-xl p-6 mb-8 shadow-[4px_4px_0px_#111827]">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-headline-md text-headline-md text-on-error-container flex items-center gap-2">
-                    <span className="material-symbols-outlined">bug_report</span>
-                    TEMP: Vehicle Debug Info
-                  </h3>
-                  <span className="px-3 py-1 bg-error text-on-error rounded-full font-label-sm text-label-sm">REMOVE BEFORE PRODUCTION</span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm font-mono">
-                  <div className="bg-surface-container-lowest p-3 rounded-lg">
-                    <span className="text-on-surface-variant">plate:</span>
-                    <span className="text-on-error-container ml-2">{vehicle.plate}</span>
-                  </div>
-                  <div className="bg-surface-container-lowest p-3 rounded-lg">
-                    <span className="text-on-surface-variant">displayName:</span>
-                    <span className="text-on-error-container ml-2">{vehicle.displayName}</span>
-                  </div>
-                  <div className="bg-surface-container-lowest p-3 rounded-lg">
-                    <span className="text-on-surface-variant">shieldStatus:</span>
-                    <span className="text-on-error-container ml-2">{vehicle.shieldStatus}</span>
-                  </div>
-                  <div className="bg-surface-container-lowest p-3 rounded-lg">
-                    <span className="text-on-surface-variant">responseEstimate:</span>
-                    <span className="text-on-error-container ml-2">{vehicle.responseEstimate}</span>
-                  </div>
-                  <div className="bg-surface-container-lowest p-3 rounded-lg">
-                    <span className="text-on-surface-variant">ownerMaskedPhone:</span>
-                    <span className="text-on-error-container ml-2">{vehicle.ownerMaskedPhone}</span>
-                  </div>
-                  <div className="bg-surface-container-lowest p-3 rounded-lg">
-                    <span className="text-on-surface-variant">registered:</span>
-                    <span className="text-on-error-container ml-2">{vehicle.registered ? 'true' : 'false'}</span>
-                  </div>
-                  <div className="bg-surface-container-lowest p-3 rounded-lg">
-                    <span className="text-on-surface-variant">verified:</span>
-                    <span className="text-on-error-container ml-2">{vehicle.verified ? 'true' : 'false'}</span>
-                  </div>
-                  <div className="bg-surface-container-lowest p-3 rounded-lg col-span-2">
-                    <span className="text-on-surface-variant">Full object:</span>
-                    <pre className="text-on-error-container mt-1 whitespace-pre-wrap text-xs overflow-auto max-h-40">{JSON.stringify(vehicle, null, 2)}</pre>
-                  </div>
-                </div>
-              </div>
-
               {/* Main Headline + Editorial Direction */}
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div className="max-w-2xl space-y-3">
@@ -380,7 +361,7 @@ export default function Contact() {
                 </div>
 
                 {/* Quick Status Filter Switcher */}
-                <div className="flex items-center gap-2 p-1.5 bg-surface-container-lowest rounded-full shadow-[3px_3px_0px_#111827]">
+                <div className="flex flex-wrap items-center gap-2 p-1.5 bg-surface-container-lowest rounded-2xl sm:rounded-full shadow-[3px_3px_0px_#111827]">
                   <button
                     id="tab-urgent"
                     onClick={() => setUrgency('urgent')}
@@ -407,9 +388,9 @@ export default function Contact() {
               </div>
 
               {/* Two Primary Option Cards (Side by Side Grid) */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-8 items-stretch">
                 {/* CARD 1: AI Voice Agent Call */}
-                <div className="bg-surface-container-lowest rounded-lg p-8 shadow-[4px_4px_0px_#111827] flex flex-col justify-between transition-transform duration-150 hover:-translate-y-1">
+                <div className="bg-surface-container-lowest rounded-lg p-5 sm:p-8 shadow-[4px_4px_0px_#111827] flex flex-col justify-between transition-transform duration-150 hover:-translate-y-1">
                   <div className="space-y-6">
                     {/* Header Badges */}
                     <div className="flex items-center justify-between gap-4">
@@ -582,6 +563,9 @@ export default function Contact() {
                           </button>
                         ))}
                       </div>
+                      <p className="text-xs text-on-surface-variant">
+                        Emergency sends the same WhatsApp message to the owner and their registered emergency contact.
+                      </p>
                     </div>
 
                     {/* Custom Message Preview & Attachment */}

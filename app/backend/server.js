@@ -273,6 +273,7 @@ app.post('/api/register', (req, res) => {
     year = '2024',
     color = 'Silver',
     ownerPhone = '',
+    emergencyContact = '',
     ownerName = 'Civic Member',
     telegramChatId = '',
     notifyCall = true,
@@ -301,6 +302,7 @@ app.post('/api/register', (req, res) => {
     shieldStatus: 'Active Member Shield',
     ownerMaskedPhone: maskedPhone,
     ownerRealPhone: ownerPhone,
+    emergencyContact,
     ownerName,
     telegramChatId: telegramChatId ? telegramChatId.toString().trim() : '',
     notifyCall,
@@ -373,6 +375,7 @@ app.post('/api/lookup', (req, res) => {
       shieldStatus: vehicle.shieldStatus,
       ownerMaskedPhone: vehicle.ownerMaskedPhone,
       ownerRealPhone: vehicle.ownerRealPhone,
+      emergencyContact: vehicle.emergencyContact || '',
       telegramChatId: vehicle.telegramChatId || '',
     },
   });

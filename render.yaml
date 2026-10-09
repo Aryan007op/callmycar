@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: callmycar-whatsapp-backend
+    runtime: docker
+    dockerfilePath: ./app/backend/Dockerfile
+    dockerContext: ./app/backend
+    plan: 0.5c-1g
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    disk:
+      name: whatsapp-session
+      mountPath: /var/data
+      sizeGB: 1

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import { registerVehicle } from '../api/client';
+import { apiUrl, registerVehicle } from '../api/client';
 import { saveVehicleToFirebase } from '../firebase';
 
 export default function Register() {
@@ -20,6 +20,7 @@ export default function Register() {
     year: '2024',
     color: 'Gravity Gold',
     ownerPhone: '+91 98765 43210',
+    emergencyContact: '',
     ownerName: 'Alex Rivera',
     notifyCall: true,
     notifySms: true,
@@ -53,7 +54,7 @@ export default function Register() {
   const [telegramBotUsername, setTelegramBotUsername] = useState('');
 
   useEffect(() => {
-    fetch('/api/telegram-bot')
+    fetch(apiUrl('/api/telegram-bot'))
       .then((response) => response.ok ? response.json() : null)
       .then((data) => setTelegramBotUsername(data?.username || ''))
       .catch((error) => console.warn('Could not load Telegram bot details:', error));
@@ -94,6 +95,7 @@ export default function Register() {
       await saveVehicleToFirebase(cleanPlate, {
         name: formData.ownerName || 'Vehicle Owner',
         phone: formData.ownerPhone.trim(),
+        emergencyContact: formData.emergencyContact.trim(),
         telegramChatId: '',
         make: formData.make,
         model: formData.model,
@@ -134,11 +136,11 @@ export default function Register() {
     <div className="bg-background min-h-screen font-body-md text-on-surface">
       <Header currentPath="register" />
 
-      <main className="w-full pt-20 bg-background">
+      <main className="w-full pt-16 sm:pt-20 bg-background overflow-x-hidden">
         <div className="flex flex-col w-full">
           {/* Top Scallop Banner */}
           <div className="w-full bg-secondary-container relative">
-            <div className="max-w-[1200px] mx-auto px-6 lg:px-10 pt-8 pb-12 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-10 pt-6 sm:pt-8 pb-10 sm:pb-12 flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
               {/* Step Tracker */}
               <div className="flex items-center flex-wrap gap-2 text-on-surface">
                 <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary-container shadow-[2px_2px_0px_#111827]">
@@ -191,7 +193,7 @@ export default function Register() {
           </div>
 
           {/* Main Action Deck */}
-          <div className="w-full bg-primary-container px-6 lg:px-10 pb-24 pt-2">
+          <div className="w-full bg-primary-container px-4 sm:px-6 lg:px-10 pb-14 sm:pb-24 pt-2">
             <div className="max-w-[1200px] mx-auto flex flex-col gap-10">
               {/* Header Title */}
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -200,7 +202,7 @@ export default function Register() {
                     <span className="material-symbols-outlined text-[16px]">verified_user</span>
                     Civic Protection Onboarding
                   </span>
-                  <h1 className="font-headline-lg text-headline-lg text-on-surface tracking-tight">
+                  <h1 className="font-headline-lg text-[30px] leading-tight sm:text-headline-lg text-on-surface tracking-tight">
                     Register Your Vehicle Shield
                   </h1>
                   <p className="font-body-lg text-body-lg text-on-surface-variant">
@@ -221,7 +223,7 @@ export default function Register() {
               {/* Main Split Grid: Form & Live Shield Card */}
               {registeredResult ? (
                 /* Success Activation Screen */
-                <div className="bg-surface-container-lowest rounded-2xl p-8 lg:p-12 shadow-[6px_6px_0px_#111827] text-center space-y-8 animate-in fade-in duration-300">
+                <div className="bg-surface-container-lowest rounded-2xl p-5 sm:p-8 lg:p-12 shadow-[6px_6px_0px_#111827] text-center space-y-8 animate-in fade-in duration-300">
                   <div className="w-20 h-20 mx-auto rounded-full bg-tertiary-container flex items-center justify-center shadow-[4px_4px_0px_#111827]">
                     <span className="material-symbols-outlined text-on-tertiary-container text-[44px]">
                       check_circle
@@ -308,7 +310,7 @@ export default function Register() {
                       to={`/contact/${encodeURIComponent(registeredResult.plate)}`}
                       className="px-8 py-4 rounded-full bg-secondary text-on-secondary font-headline-md text-headline-md shadow-[4px_4px_0px_#111827] hover:translate-x-0.5 hover:translate-y-0.5 transition-transform"
                     >
-                      Test AI Call to My Car
+                          Test AI Call to My Car
                     </Link>
                     <button
                       type="button"
@@ -415,7 +417,7 @@ export default function Register() {
                               maxLength={2}
                               value={formData.plateSegments.state}
                               readOnly
-                              className="w-14 h-12 text-center bg-surface-container font-code-plate text-[22px] tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none"
+                              className="w-10 sm:w-14 h-12 shrink-0 text-center bg-surface-container font-code-plate text-[18px] sm:text-[22px] tracking-wider sm:tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none"
                             />
                             <span className="text-on-surface-variant text-xl font-bold"> </span>
                             <input
@@ -426,7 +428,7 @@ export default function Register() {
                               value={formData.plateSegments.district}
                               onChange={(e) => updateSegment('district', e.target.value)}
                               placeholder="01"
-                              className="w-14 h-12 text-center bg-surface-bright font-code-plate text-[22px] tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none focus:bg-surface-container-low transition-colors"
+                              className="w-10 sm:w-14 h-12 shrink-0 text-center bg-surface-bright font-code-plate text-[18px] sm:text-[22px] tracking-wider sm:tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none focus:bg-surface-container-low transition-colors"
                             />
                             <span className="text-on-surface-variant text-xl font-bold"> </span>
                             <input
@@ -437,7 +439,7 @@ export default function Register() {
                               value={formData.plateSegments.series}
                               onChange={(e) => updateSegment('series', e.target.value)}
                               placeholder="AB"
-                              className="w-14 h-12 text-center bg-surface-bright font-code-plate text-[22px] tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none focus:bg-surface-container-low transition-colors"
+                              className="w-10 sm:w-14 h-12 shrink-0 text-center bg-surface-bright font-code-plate text-[18px] sm:text-[22px] tracking-wider sm:tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none focus:bg-surface-container-low transition-colors"
                             />
                             <span className="text-on-surface-variant text-xl font-bold"> </span>
                             <input
@@ -448,7 +450,7 @@ export default function Register() {
                               value={formData.plateSegments.number}
                               onChange={(e) => updateSegment('number', e.target.value)}
                               placeholder="1234"
-                              className="w-24 h-12 text-center bg-surface-bright font-code-plate text-[22px] tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none focus:bg-surface-container-low transition-colors"
+                              className="w-[68px] sm:w-24 h-12 shrink-0 text-center bg-surface-bright font-code-plate text-[18px] sm:text-[22px] tracking-wider sm:tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none focus:bg-surface-container-low transition-colors"
                             />
                           </div>
                         </div>
@@ -554,6 +556,24 @@ export default function Register() {
                         <p className="font-body-sm text-[12px] text-tertiary flex items-center gap-1 pt-1">
                           <span className="material-symbols-outlined text-[15px]">lock</span>
                           Encrypted on backend. Neither reporters nor public lookups can ever view this.
+                        </p>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-surface-container-low border border-on-surface/10 space-y-2">
+                        <label htmlFor="emergencyContact" className="block font-label-md text-label-md uppercase text-on-surface">
+                          Emergency Contact Phone (Optional)
+                        </label>
+                        <input
+                          id="emergencyContact"
+                          name="emergencyContact"
+                          type="tel"
+                          value={formData.emergencyContact}
+                          onChange={handleChange}
+                          placeholder="+91 98765 43210"
+                          className="w-full h-12 px-4 rounded-xl bg-surface-container-lowest font-headline-md text-title-md text-on-surface shadow-[2px_2px_0px_#111827] focus:outline-none"
+                        />
+                        <p className="font-body-sm text-[12px] text-on-surface-variant">
+                          The Emergency quick response will also be sent to this number.
                         </p>
                       </div>
 
