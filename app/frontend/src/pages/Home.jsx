@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import { lookupVehicle } from '../api/client';
+import { lookupVehicle, sendAssistantReport } from '../api/client';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -11,6 +11,10 @@ export default function Home() {
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
   const [plateError, setPlateError] = useState('');
+  const [voicePlate, setVoicePlate] = useState('');
+  const [voiceStatus, setVoiceStatus] = useState('');
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [voiceListening, setVoiceListening] = useState(false);
 
   const [plateSegments, setPlateSegments] = useState({
     state: 'DL',
@@ -67,6 +71,42 @@ export default function Home() {
     setTimeout(() => {
       setShowToast(false);
     }, 4500);
+  };
+
+  const listenForPlate = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setVoiceStatus('Voice input is not supported in this browser. Please type the plate instead.');
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-IN';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onstart = () => { setVoiceListening(true); setVoiceStatus('Listening… say the number plate clearly.'); };
+    recognition.onresult = (event) => {
+      const transcript = event.results?.[0]?.[0]?.transcript || '';
+      const possiblePlate = transcript.match(/[A-Z]{2}\s*\d{1,2}\s*[A-Z]{1,3}\s*\d{1,4}/i)?.[0] || transcript;
+      setVoicePlate(possiblePlate.toUpperCase());
+      setVoiceStatus(`Heard: “${transcript}”. Check the plate before sending.`);
+    };
+    recognition.onerror = () => setVoiceStatus('Could not hear the plate. Please try again or type it.');
+    recognition.onend = () => setVoiceListening(false);
+    recognition.start();
+  };
+
+  const submitVoiceReport = async (event) => {
+    event.preventDefault();
+    const cleanPlate = voicePlate.replace(/[^a-z0-9]/gi, '').toUpperCase();
+    if (!/^[A-Z]{2}\d{1,2}[A-Z]{1,3}\d{1,4}$/.test(cleanPlate)) {
+      setVoiceStatus('Please correct the plate to a valid format, such as DL 01 AB 1234, before sending.');
+      return;
+    }
+    setVoiceBusy(true);
+    setVoiceStatus('Sending a private alert to the registered owner…');
+    const result = await sendAssistantReport({ plateNumber: cleanPlate, issue: 'blocking my car' });
+    setVoiceStatus(result.fulfillmentText || (result.success ? 'Alert sent.' : 'Could not send the alert.'));
+    setVoiceBusy(false);
   };
 
   return (
@@ -216,6 +256,20 @@ export default function Home() {
           {/* SUNNY YELLOW ACTION DECK */}
           <section className="relative w-full bg-primary-container pt-8 pb-20">
             <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
+              <div className="max-w-3xl mx-auto mb-16 rounded-2xl bg-surface-container-lowest p-6 sm:p-8 shadow-[6px_6px_0px_#141b2b]" aria-labelledby="voice-report-title">
+                <div className="text-center space-y-2 mb-5">
+                  <h2 id="voice-report-title" className="font-headline-md text-headline-md text-on-surface">Report a blocking vehicle by voice</h2>
+                  <p className="font-body-sm text-body-sm text-on-surface-variant">Say “vehicle DL 01 AB 1234 is blocking my car,” check the plate we heard, then send the private alert.</p>
+                </div>
+                <form onSubmit={submitVoiceReport} className="flex flex-col sm:flex-row gap-3">
+                  <label className="sr-only" htmlFor="voice-report-plate">Vehicle number plate</label>
+                  <input id="voice-report-plate" value={voicePlate} onChange={(event) => setVoicePlate(event.target.value)} placeholder="DL 01 AB 1234" className="min-w-0 flex-1 rounded-xl border border-on-surface/20 px-4 py-3 font-code-plate uppercase" autoComplete="off" />
+                  <button type="button" onClick={listenForPlate} disabled={voiceListening || voiceBusy} className="rounded-full bg-secondary px-5 py-3 text-on-secondary font-title-md disabled:opacity-60">{voiceListening ? 'Listening…' : '🎙️ Say plate'}</button>
+                  <button type="submit" disabled={voiceBusy} className="rounded-full bg-tertiary px-5 py-3 text-on-tertiary font-title-md disabled:opacity-60">{voiceBusy ? 'Sending…' : 'Send alert'}</button>
+                </form>
+                {voiceStatus && <p role="status" aria-live="polite" className="mt-4 text-center font-body-sm text-on-surface-variant">{voiceStatus}</p>}
+                <p className="mt-3 text-center text-xs text-on-surface-variant">Google Assistant cannot currently pass a spoken plate directly to websites. Use the microphone here; voice recognition may require browser permission.</p>
+              </div>
               {/* Split Showcase: Isometric Parking Scene + Editorial Story */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
                 {/* Isometric Visual Canvas */}

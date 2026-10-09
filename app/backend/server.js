@@ -9,10 +9,23 @@ const express = require('express');
 const cors = require('cors');
 const twilio = require('twilio');
 const admin = require('firebase-admin');
-const { isReady: isWhatsAppReady, sendAlert: sendWhatsAppAlert, formatIndianPhoneNumber } = require('./whatsappService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const assistantReportAttempts = new Map();
+
+let whatsappWebService = null;
+if (!process.env.VERCEL) {
+  try {
+    whatsappWebService = require('./whatsappService');
+  } catch (error) {
+    console.error('WhatsApp Web service could not start:', error.message);
+  }
+}
+
+function getWhatsAppWebService() {
+  return whatsappWebService;
+}
 
 // Initialize Twilio client safely after dotenv has loaded
 let twilioClient = null;
@@ -27,6 +40,21 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.get('/health', (_req, res) => res.status(200).json({ success: true }));
+
+app.get('/api/whatsapp-status', (_req, res) => {
+  const whatsappWeb = getWhatsAppWebService();
+  if (!whatsappWeb) {
+    return res.status(503).json({
+      success: false,
+      ready: false,
+      error: 'WhatsApp Web needs a persistent backend; Vercel serverless cannot keep its authenticated session.',
+    });
+  }
+  const status = whatsappWeb.getStatus?.() || { state: whatsappWeb.isReady() ? 'ready' : 'initializing' };
+  return res.json({ success: true, ready: whatsappWeb.isReady(), ...status });
+});
 
 // In-memory registered vehicles database (Mock VAHAN database)
 const VEHICLE_DATABASE = {
@@ -112,6 +140,20 @@ function getVehicleDocumentId(plate) {
   return normalizePlate(plate).replace(/\s+/g, '');
 }
 
+function normalizePhoneToE164(phone) {
+  const rawPhone = String(phone || '').trim();
+  const isInternationalInput = rawPhone.startsWith('+') || rawPhone.startsWith('00');
+  let digits = rawPhone.replace(/\D/g, '');
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  if (!isInternationalInput) {
+    if (digits.length === 10) digits = `91${digits}`;
+    else if (digits.length === 11 && digits.startsWith('1')) digits = digits;
+    else if (digits.length === 12 && digits.startsWith('91')) digits = digits;
+    else return null;
+  }
+  return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : null;
+}
+
 function getFirestore() {
   if (!admin.apps.length) {
     const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
@@ -145,6 +187,68 @@ async function sendTelegramMessage(chatId, text, parseMode) {
     throw new Error(data.description || 'Failed to send Telegram message');
   }
   return data;
+}
+
+function getAssistantValue(payload, keys) {
+  const sources = [
+    payload?.queryResult?.parameters,
+    payload?.result?.parameters,
+    payload?.parameters,
+    payload,
+  ];
+
+  for (const key of keys) {
+    for (const source of sources) {
+      let value = source?.[key];
+      if (Array.isArray(value)) value = value[0];
+      if (value && typeof value === 'object') {
+        value = value.resolved ?? value.original ?? value.value;
+      }
+      if (typeof value === 'string' || typeof value === 'number') {
+        const normalized = String(value).trim();
+        if (normalized) return normalized;
+      }
+    }
+  }
+  return '';
+}
+
+async function dispatchAssistantReport(vehicle, cleanPlate, issue, urgency) {
+  const displayPlate = String(vehicle.plateDisplay || vehicle.plate || vehicle.plateNumber || cleanPlate);
+  const ownerPhone = vehicle.ownerRealPhone || vehicle.ownerPhone || vehicle.phone ||
+    vehicle.phoneNumber || vehicle.mobileNumber || vehicle.mobile || '';
+  const whatsappWeb = getWhatsAppWebService();
+  if (!ownerPhone) {
+    throw new Error('This vehicle has no owner phone number registered.');
+  }
+  if (!whatsappWeb) {
+    throw new Error('WhatsApp is unavailable on this backend. Run the persistent WhatsApp backend and pair it using its QR code.');
+  }
+  if (!whatsappWeb.isReady()) {
+    const status = whatsappWeb.getStatus?.();
+    throw new Error(status?.state === 'qr_required'
+      ? 'WhatsApp is not paired. Scan the QR code in the backend terminal, then try again.'
+      : `WhatsApp is not ready${status?.state ? ` (${status.state})` : ''}.`);
+  }
+  const result = await whatsappWeb.sendAlert({
+    ownerPhone,
+    plateNumber: displayPlate,
+    issue: `${issue} (urgency: ${urgency})`,
+  });
+  return { channel: 'whatsapp', messageId: result?.id?._serialized || null };
+}
+
+async function findVehicleForAssistantReport(cleanPlate) {
+  // The current registration flow stores new records in memory. Check it first,
+  // matching by normalized document ID so spaced and unspaced plates both work.
+  const localMatch = Object.values(VEHICLE_DATABASE).find(
+    (vehicle) => getVehicleDocumentId(vehicle.plate || vehicle.plateNumber) === cleanPlate,
+  );
+  if (localMatch) return localMatch;
+
+  // Also support vehicles registered directly in Firestore with clean plate IDs.
+  const snapshot = await getFirestore().collection('vehicles').doc(cleanPlate).get();
+  return snapshot.exists ? snapshot.data() || {} : null;
 }
 
 // Helper to mask phone numbers for zero-knowledge privacy
@@ -477,7 +581,7 @@ app.get('/api/status/:callId', async (req, res) => {
 
 /**
  * POST /api/sms
- * Send WhatsApp notification via Twilio template (fixes Error 21654)
+ * Send a WhatsApp alert through the authenticated WhatsApp Web session
  */
 app.post('/api/sms', async (req, res) => {
   console.log("Payload received:", req.body);
@@ -496,50 +600,22 @@ app.post('/api/sms', async (req, res) => {
     const vehicle = cleanPlate ? VEHICLE_DATABASE[cleanPlate] : null;
 
     let targetPhone = body.phone || (vehicle && vehicle.ownerRealPhone) || process.env.DEFAULT_ALERT_PHONE || '';
-    targetPhone = targetPhone.trim();
+    targetPhone = normalizePhoneToE164(targetPhone);
     if (!targetPhone) {
-      return res.status(400).json({ error: 'Recipient phone number is required to send WhatsApp message.' });
+      return res.status(400).json({ error: 'Enter a valid phone number with its country code (or a 10-digit Indian number).' });
     }
 
-    // If whatsapp-web.js client has fired the ready event, send via whatsapp-web.js
-    if (isWhatsAppReady()) {
-      const cleanNumber = String(targetPhone).replace(/[\s\-+]/g, '').replace(/\D/g, '');
-      const tenDigitNumber = cleanNumber.slice(-10);
-      const recipient = `91${tenDigitNumber}@c.us`;
-
-      const waResult = await sendWhatsAppAlert({ ownerPhone: recipient, plateNumber: cleanPlate, issue: customMessage });
-      console.log(`WhatsApp sent successfully via whatsapp-web.js to ${recipient}:`, waResult?.id?._serialized);
-      return res.status(200).json({ success: true, messageId: waResult?.id?._serialized || null, targetPhone: recipient });
+    const whatsappWeb = getWhatsAppWebService();
+    if (!whatsappWeb) {
+      return res.status(503).json({ error: 'WhatsApp Web needs a persistent backend. Vercel serverless cannot keep its authenticated session.' });
+    }
+    if (!whatsappWeb.isReady()) {
+      return res.status(503).json({ error: 'WhatsApp is not authenticated. Scan the QR code shown in the backend terminal, then try again.' });
     }
 
-    if (!targetPhone.startsWith('+')) {
-      targetPhone = `+91${targetPhone}`;
-    }
-
-    // Ensure Twilio credentials are valid before attempting to call the SDK
-    const activeTwilioClient = twilioClient || (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : null);
-    if (!activeTwilioClient) {
-      return res.status(500).json({
-        success: false,
-        error: 'Twilio configuration error: TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN is missing or undefined in .env.'
-      });
-    }
-
-    // Must use contentSid & contentVariables for Twilio WhatsApp (fixes Error 21654)
-    const message = await activeTwilioClient.messages.create({
-      from: 'whatsapp:+17372508034',
-      to: `whatsapp:${targetPhone}`,
-      contentSid: 'HXfe5ab5f00277942d4d4200328b4d403c',
-      contentVariables: JSON.stringify({
-        1: 'CallMyCar',
-        2: cleanPlate || 'ALERT',
-        3: 'NOW',
-        4: customMessage
-      })
-    });
-
-    console.log(`WhatsApp sent successfully to ${targetPhone}:`, message.sid);
-    return res.status(200).json({ success: true, messageId: message.sid, targetPhone });
+    const message = await whatsappWeb.sendAlert({ ownerPhone: targetPhone, plateNumber: cleanPlate || 'ALERT', issue: customMessage });
+    console.log('WhatsApp Web message sent:', message?.id?._serialized);
+    return res.status(200).json({ success: true, messageId: message?.id?._serialized || null, status: 'sent', targetPhone });
   } catch (error) {
     console.error("WhatsApp error:", error);
     return res.status(500).json({ error: error.message || 'Failed to send WhatsApp message' });
@@ -638,6 +714,65 @@ app.post('/api/telegram-alert', async (req, res) => {
   }
 });
 
+/** Process a voice assistant report and alert the registered vehicle owner. */
+app.post('/api/assistant-report', async (req, res) => {
+  // This route is called directly by the public website, so keep abuse limited
+  // without requiring a secret that cannot safely be embedded in frontend code.
+  const requester = req.ip || req.socket?.remoteAddress || 'unknown';
+  const now = Date.now();
+  const recentAttempts = (assistantReportAttempts.get(requester) || []).filter((time) => now - time < 10 * 60 * 1000);
+  if (recentAttempts.length >= 5) {
+    return res.status(429).json({ fulfillmentText: 'Please wait a few minutes before sending another vehicle report.', success: false });
+  }
+  recentAttempts.push(now);
+  assistantReportAttempts.set(requester, recentAttempts);
+
+  const body = req.body || {};
+  const plateInput = getAssistantValue(body, [
+    'plateNumber', 'licensePlate', 'plate', 'vehicleNumber', 'registrationNumber', 'registration_number',
+  ]);
+  const cleanPlate = getVehicleDocumentId(plateInput);
+
+  if (!cleanPlate) {
+    return res.status(400).json({
+      fulfillmentText: 'Sorry, I could not detect a valid license plate number.',
+      success: false,
+    });
+  }
+
+  const issue = getAssistantValue(body, ['issue', 'problem', 'report', 'reason'])
+    .slice(0, 250) || 'a vehicle issue';
+  const urgency = getAssistantValue(body, ['urgency', 'priority']).slice(0, 40) || 'standard';
+
+  try {
+    const vehicle = await findVehicleForAssistantReport(cleanPlate);
+    if (!vehicle) {
+      const displayPlate = plateInput.toUpperCase().replace(/[^A-Z0-9\s]/g, '').trim() || cleanPlate;
+      return res.status(404).json({
+        fulfillmentText: `Vehicle ${displayPlate} is not registered in the CallMyCar directory.`,
+        success: false,
+        plate: cleanPlate,
+      });
+    }
+
+    const displayPlate = String(vehicle.plateDisplay || vehicle.plate || vehicle.plateNumber || cleanPlate);
+    const delivery = await dispatchAssistantReport(vehicle, cleanPlate, issue, urgency);
+    return res.status(200).json({
+      fulfillmentText: `Got it. A private alert has been sent to the owner of vehicle ${displayPlate} regarding ${issue}.`,
+      success: true,
+      plate: cleanPlate,
+      channel: delivery.channel,
+    });
+  } catch (error) {
+    console.error('[Assistant report] Could not process voice report:', error.message);
+    return res.status(502).json({
+      fulfillmentText: 'Sorry, I could not send that vehicle alert right now. Please try again later.',
+      success: false,
+      plate: cleanPlate,
+    });
+  }
+});
+
 async function configureTelegramWebhook() {
   const { TELEGRAM_BOT_TOKEN: token, TELEGRAM_WEBHOOK_URL: url, TELEGRAM_WEBHOOK_SECRET: secret } = process.env;
   if (!token || !url || !secret || token === 'YOUR_BOT_TOKEN_HERE') return;
@@ -663,12 +798,15 @@ const telegramWebhookReady = configureTelegramWebhook();
  */
 app.post('/api/send-alert', async (req, res) => {
   console.log("Payload received:", req.body);
+  const whatsappWeb = getWhatsAppWebService();
 
   // Check if WhatsApp client has actually fired the ready event
-  if (!isWhatsAppReady()) {
+  if (!whatsappWeb?.isReady()) {
     return res.status(503).json({
       success: false,
-      error: 'WhatsApp service is temporarily unavailable: client has not fired the ready event yet. Please scan the QR code in the terminal.'
+      error: whatsappWeb
+        ? 'WhatsApp is not authenticated. Scan the QR code shown in the backend terminal, then try again.'
+        : 'WhatsApp Web needs a persistent backend. Vercel serverless cannot keep its authenticated session.'
     });
   }
 
@@ -685,12 +823,8 @@ app.post('/api/send-alert', async (req, res) => {
       });
     }
 
-    // Specifically strip out spaces, dashes, and + signs, and format strictly as 91[10-digit-number]@c.us
-    const cleanNumber = String(rawPhone).replace(/[\s\-+]/g, '').replace(/\D/g, '');
-    const tenDigitNumber = cleanNumber.slice(-10);
-    const recipient = `91${tenDigitNumber}@c.us`;
-
-    const result = await sendWhatsAppAlert({ ownerPhone: recipient, plateNumber, issue });
+    const recipient = whatsappWeb.formatIndianPhoneNumber(rawPhone);
+    const result = await whatsappWeb.sendAlert({ ownerPhone: rawPhone, plateNumber, issue });
 
     return res.status(200).json({
       success: true,
