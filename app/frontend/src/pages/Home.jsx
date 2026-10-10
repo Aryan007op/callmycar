@@ -1,20 +1,22 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import { lookupVehicle, sendAssistantReport } from '../api/client';
 
 export default function Home() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [state, setState] = useState('DL');
-  const [isVerified, setIsVerified] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [showToast, setShowToast] = useState(false);
   const [plateError, setPlateError] = useState('');
-  const [voicePlate, setVoicePlate] = useState('');
-  const [voiceStatus, setVoiceStatus] = useState('');
-  const [voiceBusy, setVoiceBusy] = useState(false);
-  const [voiceListening, setVoiceListening] = useState(false);
+
+  React.useEffect(() => {
+    const targetId = location.hash.slice(1);
+    if (!targetId) return;
+
+    requestAnimationFrame(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [location.hash]);
 
   const [plateSegments, setPlateSegments] = useState({
     state: 'DL',
@@ -26,8 +28,8 @@ export default function Home() {
   const handleStateChange = (newState) => {
     setState(newState);
     setPlateSegments((prev) => ({ ...prev, state: newState }));
-    setIsVerified(false);
     setPlateError('');
+    document.getElementById('plate-district')?.focus();
   };
 
   const updateSegment = (segment, value) => {
@@ -35,21 +37,15 @@ export default function Home() {
     let maxLength = 2;
     if (segment === 'series') maxLength = 2;
     if (segment === 'number') maxLength = 4;
+    const nextField = { district: 'plate-series', series: 'plate-number' }[segment];
     setPlateSegments((prev) => ({ ...prev, [segment]: cleaned.slice(0, maxLength) }));
-    setIsVerified(false);
+    if (cleaned.length >= maxLength && nextField) document.getElementById(nextField)?.focus();
     setPlateError('');
   };
 
   const getPlateString = () => {
     const { state, district, series, number } = plateSegments;
     return `${state} ${district} ${series} ${number}`.trim();
-  };
-
-  const triggerLookup = async (st = state) => {
-    const pl = getPlateString();
-    if (!pl.trim()) return;
-    await lookupVehicle(pl, st);
-    setIsVerified(true);
   };
 
   const handleProceedToContact = (e) => {
@@ -62,51 +58,6 @@ export default function Home() {
     setPlateError('');
     const pl = getPlateString();
     navigate(`/contact/${encodeURIComponent(pl.trim())}?state=${state}`);
-  };
-
-  const handleQuickAlert = (issueName) => {
-    const cleanPlate = plate.trim() || 'AA 1234';
-    setToastMessage(`Alert sent to ${cleanPlate}: "${issueName}"`);
-    setShowToast(true);
-    setTimeout(() => {
-      setShowToast(false);
-    }, 4500);
-  };
-
-  const listenForPlate = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setVoiceStatus('Voice input is not supported in this browser. Please type the plate instead.');
-      return;
-    }
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-IN';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognition.onstart = () => { setVoiceListening(true); setVoiceStatus('Listening… say the number plate clearly.'); };
-    recognition.onresult = (event) => {
-      const transcript = event.results?.[0]?.[0]?.transcript || '';
-      const possiblePlate = transcript.match(/[A-Z]{2}\s*\d{1,2}\s*[A-Z]{1,3}\s*\d{1,4}/i)?.[0] || transcript;
-      setVoicePlate(possiblePlate.toUpperCase());
-      setVoiceStatus(`Heard: “${transcript}”. Check the plate before sending.`);
-    };
-    recognition.onerror = () => setVoiceStatus('Could not hear the plate. Please try again or type it.');
-    recognition.onend = () => setVoiceListening(false);
-    recognition.start();
-  };
-
-  const submitVoiceReport = async (event) => {
-    event.preventDefault();
-    const cleanPlate = voicePlate.replace(/[^a-z0-9]/gi, '').toUpperCase();
-    if (!/^[A-Z]{2}\d{1,2}[A-Z]{1,3}\d{1,4}$/.test(cleanPlate)) {
-      setVoiceStatus('Please correct the plate to a valid format, such as DL 01 AB 1234, before sending.');
-      return;
-    }
-    setVoiceBusy(true);
-    setVoiceStatus('Sending a private alert to the registered owner…');
-    const result = await sendAssistantReport({ plateNumber: cleanPlate, issue: 'blocking my car' });
-    setVoiceStatus(result.fulfillmentText || (result.success ? 'Alert sent.' : 'Could not send the alert.'));
-    setVoiceBusy(false);
   };
 
   return (
@@ -195,20 +146,6 @@ export default function Home() {
           {/* SUNNY YELLOW ACTION DECK */}
           <section className="relative w-full bg-primary-container pt-8 pb-20">
             <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-10">
-              <div className="max-w-3xl mx-auto mb-16 rounded-2xl bg-surface-container-lowest p-6 sm:p-8 shadow-[6px_6px_0px_#141b2b]" aria-labelledby="voice-report-title">
-                <div className="text-center space-y-2 mb-5">
-                  <h2 id="voice-report-title" className="font-headline-md text-headline-md text-on-surface">Report a blocking vehicle by voice</h2>
-                  <p className="font-body-sm text-body-sm text-on-surface-variant">Say “vehicle DL 01 AB 1234 is blocking my car,” check the plate we heard, then send the private alert.</p>
-                </div>
-                <form onSubmit={submitVoiceReport} className="flex flex-col sm:flex-row gap-3">
-                  <label className="sr-only" htmlFor="voice-report-plate">Vehicle number plate</label>
-                  <input id="voice-report-plate" value={voicePlate} onChange={(event) => setVoicePlate(event.target.value)} placeholder="DL 01 AB 1234" className="min-w-0 flex-1 rounded-xl border border-on-surface/20 px-4 py-3 font-code-plate uppercase" autoComplete="off" />
-                  <button type="button" onClick={listenForPlate} disabled={voiceListening || voiceBusy} className="rounded-full bg-secondary px-5 py-3 text-on-secondary font-title-md disabled:opacity-60">{voiceListening ? 'Listening…' : '🎙️ Say plate'}</button>
-                  <button type="submit" disabled={voiceBusy} className="rounded-full bg-tertiary px-5 py-3 text-on-tertiary font-title-md disabled:opacity-60">{voiceBusy ? 'Sending…' : 'Send alert'}</button>
-                </form>
-                {voiceStatus && <p role="status" aria-live="polite" className="mt-4 text-center font-body-sm text-on-surface-variant">{voiceStatus}</p>}
-                <p className="mt-3 text-center text-xs text-on-surface-variant">Google Assistant cannot currently pass a spoken plate directly to websites. Use the microphone here; voice recognition may require browser permission.</p>
-              </div>
               {/* Split Showcase: Isometric Parking Scene + Editorial Story */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
                 {/* Parking example image supplied by the user */}
@@ -403,27 +340,6 @@ export default function Home() {
                         </p>
                       )}
 
-                      {/* Fast Suggestion Badges */}
-                      <div className="flex flex-wrap items-center gap-2 pt-1">
-                        <span className="font-label-md text-label-md text-on-surface-variant uppercase">
-                          Try demo plates:
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectDemoPlate('DL', 'DL 01 AB 1234')}
-                          className="px-3 py-1 rounded-full bg-surface-container font-label-md text-label-md text-on-surface shadow-[2px_2px_0px_#141b2b] hover:bg-secondary-fixed transition-colors"
-                        >
-                          DL • DL 01 AB 1234
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectDemoPlate('MH', 'MH 02 CZ 9999')}
-                          className="px-3 py-1 rounded-full bg-surface-container font-label-md text-label-md text-on-surface shadow-[2px_2px_0px_#141b2b] hover:bg-secondary-fixed transition-colors"
-                        >
-                          MH • MH 02 CZ 9999
-                        </button>
-                      </div>
-
                       {/* Big Tactile Proceed Action Button */}
                       <div className="pt-3">
                         <button
@@ -436,127 +352,6 @@ export default function Home() {
                         </button>
                       </div>
                     </form>
-
-                    {/* Quick Civic Notice Selector (Triggered State) */}
-                    <div
-                      id="notice-modal"
-                      className={`mt-6 pt-6 border-t border-on-surface/10 space-y-4 ${
-                        isVerified ? 'block animate-in fade-in duration-300' : 'hidden'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-tertiary"></span>
-                          <span className="font-title-md text-title-md text-on-surface">
-                            Vehicle Verified:{' '}
-                            <span id="active-plate-preview" className="font-code-plate text-[20px] text-secondary">
-                              {getPlateString()}
-                            </span>
-                          </span>
-                        </div>
-                        <span className="text-tertiary font-label-md text-label-md uppercase">
-                          Owner Registered
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <button
-                          type="button"
-                          onClick={() => handleQuickAlert('Driveway Blocked')}
-                          className="p-3 rounded-xl bg-surface-container hover:bg-secondary-container text-left shadow-[2px_2px_0px_#141b2b] transition-all flex items-center gap-3 group"
-                        >
-                          <div className="w-9 h-9 rounded-lg bg-surface-container-lowest flex items-center justify-center text-on-surface group-hover:scale-105 transition-transform">
-                            <span className="material-symbols-outlined text-[20px] text-error">
-                              block
-                            </span>
-                          </div>
-                          <div>
-                            <div className="font-title-md text-body-md text-on-surface font-semibold">
-                              Driveway Blocked
-                            </div>
-                            <div className="font-body-sm text-body-sm text-on-surface-variant">
-                              Request gentle repositioning
-                            </div>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleQuickAlert('Lights Left On')}
-                          className="p-3 rounded-xl bg-surface-container hover:bg-primary-container text-left shadow-[2px_2px_0px_#141b2b] transition-all flex items-center gap-3 group"
-                        >
-                          <div className="w-9 h-9 rounded-lg bg-surface-container-lowest flex items-center justify-center text-on-surface group-hover:scale-105 transition-transform">
-                            <span className="material-symbols-outlined text-[20px] text-primary">
-                              lightbulb
-                            </span>
-                          </div>
-                          <div>
-                            <div className="font-title-md text-body-md text-on-surface font-semibold">
-                              Lights / Hazard On
-                            </div>
-                            <div className="font-body-sm text-body-sm text-on-surface-variant">
-                              Battery drain alert
-                            </div>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleQuickAlert('Window Open')}
-                          className="p-3 rounded-xl bg-surface-container hover:bg-tertiary-container text-left shadow-[2px_2px_0px_#141b2b] transition-all flex items-center gap-3 group"
-                        >
-                          <div className="w-9 h-9 rounded-lg bg-surface-container-lowest flex items-center justify-center text-on-surface group-hover:scale-105 transition-transform">
-                            <span className="material-symbols-outlined text-[20px] text-tertiary">
-                              sensor_window
-                            </span>
-                          </div>
-                          <div>
-                            <div className="font-title-md text-body-md text-on-surface font-semibold">
-                              Window Rolled Down
-                            </div>
-                            <div className="font-body-sm text-body-sm text-on-surface-variant">
-                              Rain or security risk
-                            </div>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleQuickAlert('Street Sweeper Alert')}
-                          className="p-3 rounded-xl bg-surface-container hover:bg-secondary-fixed text-left shadow-[2px_2px_0px_#141b2b] transition-all flex items-center gap-3 group"
-                        >
-                          <div className="w-9 h-9 rounded-lg bg-surface-container-lowest flex items-center justify-center text-on-surface group-hover:scale-105 transition-transform">
-                            <span className="material-symbols-outlined text-[20px] text-secondary">
-                              cleaning_services
-                            </span>
-                          </div>
-                          <div>
-                            <div className="font-title-md text-body-md text-on-surface font-semibold">
-                              Street Sweeper Impending
-                            </div>
-                            <div className="font-body-sm text-body-sm text-on-surface-variant">
-                              Avoid municipality ticket
-                            </div>
-                          </div>
-                        </button>
-                      </div>
-
-                      {/* Toast indicator */}
-                      {showToast && (
-                        <div
-                          id="status-toast"
-                          className="p-4 rounded-xl bg-tertiary-container text-on-tertiary-container font-title-md text-title-md flex items-center justify-between shadow-[3px_3px_0px_#141b2b] animate-in fade-in slide-in-from-top-2"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-[24px]">send</span>
-                            <span id="status-message">{toastMessage}</span>
-                          </div>
-                          <span className="font-label-md text-label-md uppercase bg-surface-container-lowest px-2.5 py-1 rounded-md text-on-surface">
-                            Delivered
-                          </span>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
               </div>
@@ -636,6 +431,52 @@ export default function Home() {
                     <span>Message sent to the owner</span>
                   </div>
                 </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="benefits" className="scroll-mt-24 w-full bg-surface-container-low py-14 sm:py-20">
+            <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-10">
+              <div className="mx-auto mb-10 max-w-2xl text-center">
+                <h2 className="font-headline-lg text-headline-lg text-on-surface">Benefits</h2>
+                <p className="mt-3 font-body-lg text-body-lg text-on-surface-variant">CallMyCar provides a faster, safer, and privacy-focused way to resolve blocked vehicle issues. With location assistance, multi-channel notifications, and transparent resolution tracking, it simplifies communication between drivers and vehicle owners while creating a smoother parking experience.</p>
+              </div>
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {[
+                  ['speed', 'Faster Vehicle Resolution', 'CallMyCar helps users quickly resolve blocked vehicle situations by connecting drivers and vehicle owners through a secure notification system, reducing unnecessary waiting and searching.'],
+                  ['location_on', 'Location-Based Assistance', 'With vehicle location sharing, owners can easily identify where their vehicle is causing an obstruction, making the resolution process faster and more convenient.'],
+                  ['shield', 'Privacy-Focused Communication', 'CallMyCar enables communication between drivers and vehicle owners without exposing personal phone numbers, ensuring a safer and more respectful interaction.'],
+                  ['track_changes', 'Transparent Resolution Tracking', 'Track the complete journey of a request — from reporting the issue to owner notification and final resolution — creating a clear and reliable experience for users.'],
+                  ['forum', 'Multiple Communication Channels', 'Users can receive updates through integrated communication methods like AI voice calls, WhatsApp, or Telegram, ensuring better accessibility and faster responses.'],
+                  ['domain', 'Scalable for Multiple Environments', 'CallMyCar can be adapted for campuses, residential communities, offices, hospitals, and parking facilities to improve vehicle management and reduce access-related conflicts.'],
+                ].map(([icon, title, description]) => (
+                  <article key={title} className="rounded-2xl border border-on-surface/10 bg-surface-container-lowest p-6 shadow-[4px_4px_0px_#141b2b]">
+                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary-container text-on-primary-container">
+                      <span aria-hidden="true" className="material-symbols-outlined text-2xl">{icon}</span>
+                    </div>
+                    <h3 className="font-title-lg text-title-lg text-on-surface">{title}</h3>
+                    <p className="mt-2 font-body-md text-body-md text-on-surface-variant">{description}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section id="safety-and-privacy" className="scroll-mt-24 w-full bg-background py-14 sm:py-20">
+            <div className="mx-auto grid max-w-[1200px] gap-8 px-4 sm:px-6 lg:grid-cols-2 lg:px-10 lg:items-center">
+              <div>
+                <h2 className="font-headline-lg text-headline-lg text-on-surface">Safety &amp; Privacy</h2>
+                <p className="mt-4 max-w-xl font-body-lg text-body-lg text-on-surface-variant">CallMyCar is designed to help people resolve everyday vehicle issues with a private, considerate message.</p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <article className="rounded-2xl bg-surface-container-low p-5">
+                  <h3 className="font-title-lg text-title-lg text-on-surface">Your phone number stays private</h3>
+                  <p className="mt-2 font-body-md text-body-md text-on-surface-variant">Alerts are relayed without displaying the sender’s number to the vehicle owner.</p>
+                </article>
+                <article className="rounded-2xl bg-surface-container-low p-5">
+                  <h3 className="font-title-lg text-title-lg text-on-surface">Use the service responsibly</h3>
+                  <p className="mt-2 font-body-md text-body-md text-on-surface-variant">Send relevant, respectful alerts. Call emergency services directly when someone is in immediate danger.</p>
+                </article>
               </div>
             </div>
           </section>

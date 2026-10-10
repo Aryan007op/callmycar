@@ -15,13 +15,12 @@ export default function Register() {
       series: '',
       number: '',
     },
-    make: 'Hyundai',
-    model: 'Ioniq 5',
-    year: '2024',
-    color: 'Gravity Gold',
-    ownerPhone: '+91 98765 43210',
+    make: '',
+    model: '',
+    year: '',
+    color: '',
+    ownerPhone: '',
     emergencyContact: '',
-    ownerName: 'Alex Rivera',
     notifyCall: true,
     notifySms: true,
   });
@@ -29,18 +28,22 @@ export default function Register() {
   const handleStateChange = (newState) => {
     setFormData((prev) => ({
       ...prev,
+      state: newState,
       plateSegments: { ...prev.plateSegments, state: newState },
     }));
+    document.getElementById('plate-district')?.focus();
   };
 
   const updateSegment = (segment, value) => {
     const cleaned = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     let maxLength = 2;
     if (segment === 'number') maxLength = 4;
+    const nextField = { district: 'plate-series', series: 'plate-number' }[segment];
     setFormData((prev) => ({
       ...prev,
       plateSegments: { ...prev.plateSegments, [segment]: cleaned.slice(0, maxLength) },
     }));
+    if (cleaned.length >= maxLength && nextField) document.getElementById(nextField)?.focus();
   };
 
   const getPlateString = () => {
@@ -70,8 +73,6 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault(); // Stop page refresh
-    console.log("Submit button clicked! Processing registration...");
-
     const plate = getPlateString();
     if (!plate.trim()) {
       setErrorMsg('Please enter your license plate number.');
@@ -86,14 +87,18 @@ export default function Register() {
     setIsSubmitting(true);
 
     const cleanPlate = plate.replace(/\s+/g, '').toUpperCase();
-    console.log("Processing registration for plate:", cleanPlate);
-
     try {
-      console.log("Attempting to write to Firestore for plate:", cleanPlate);
+      const res = await registerVehicle({
+        ...formData,
+        plate,
+        telegramChatId: '',
+      });
+      if (!res?.success) {
+        throw new Error(res?.error || 'Registration failed. Please try again.');
+      }
 
-      // Save to Firestore 'vehicles' collection
       await saveVehicleToFirebase(cleanPlate, {
-        name: formData.ownerName || 'Vehicle Owner',
+        name: 'Vehicle Owner',
         phone: formData.ownerPhone.trim(),
         emergencyContact: formData.emergencyContact.trim(),
         telegramChatId: '',
@@ -104,27 +109,9 @@ export default function Register() {
         plateDisplay: plate,
       });
 
-      console.log("Firestore Write Success!");
-
-      // Also call backend API
-      const res = await registerVehicle({ 
-        ...formData,
-        plate,
-        telegramChatId: '',
-      });
-      if (res && res.success) {
-        setRegisteredResult(res.vehicle);
-        console.log("Backend API Success!");
-      } else {
-        setErrorMsg(res?.error || 'Registration failed. Please try again.');
-      }
-      
-      console.log("Registration complete!");
-      alert("Vehicle registered successfully!");
+      setRegisteredResult(res.vehicle);
     } catch (error) {
-      console.error("Firestore Error:", error);
       setErrorMsg('Could not register vehicle: ' + error.message);
-      alert("Failed to register: " + error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -310,7 +297,7 @@ export default function Register() {
                       to={`/contact/${encodeURIComponent(registeredResult.plate)}`}
                       className="px-8 py-4 rounded-full bg-secondary text-on-secondary font-headline-md text-headline-md shadow-[4px_4px_0px_#111827] hover:translate-x-0.5 hover:translate-y-0.5 transition-transform"
                     >
-                          Test AI Call to My Car
+                          View vehicle alert page
                     </Link>
                     <button
                       type="button"
@@ -550,7 +537,7 @@ export default function Register() {
                           required
                           value={formData.ownerPhone}
                           onChange={handleChange}
-                          placeholder="+1 (555) 000-0000 or +91 98765 43210"
+                          placeholder="+91 XXXXX XXXXX"
                           className="w-full h-12 px-4 rounded-xl bg-surface-container-lowest font-headline-md text-title-md text-on-surface shadow-[2px_2px_0px_#111827] focus:outline-none"
                         />
                         <p className="font-body-sm text-[12px] text-tertiary flex items-center gap-1 pt-1">
@@ -569,7 +556,7 @@ export default function Register() {
                           type="tel"
                           value={formData.emergencyContact}
                           onChange={handleChange}
-                          placeholder="+91 98765 43210"
+                          placeholder="+91 XXXXX XXXXX"
                           className="w-full h-12 px-4 rounded-xl bg-surface-container-lowest font-headline-md text-title-md text-on-surface shadow-[2px_2px_0px_#111827] focus:outline-none"
                         />
                         <p className="font-body-sm text-[12px] text-on-surface-variant">

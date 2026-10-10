@@ -28,9 +28,9 @@ export default function Footer() {
             </h3>
             <ul className="space-y-2 font-body-sm text-body-sm text-white/70">
               <li>
-                <a className="hover:text-white transition-colors" href="#benefits">
+                <Link className="hover:text-white transition-colors" to="/benefits">
                   Civic Responsibility
-                </a>
+                </Link>
               </li>
               <li>
                 <a className="hover:text-white transition-colors" href="#how-it-works">
@@ -56,9 +56,9 @@ export default function Footer() {
             </h3>
             <ul className="space-y-2 font-body-sm text-body-sm text-white/70">
               <li>
-                <a className="hover:text-white transition-colors" href="#safety-and-privacy">
+                <Link className="hover:text-white transition-colors" to="/safety-privacy">
                   Privacy Shield
-                </a>
+                </Link>
               </li>
               <li>
                 <a className="hover:text-white transition-colors" href="#encrypted-relay">

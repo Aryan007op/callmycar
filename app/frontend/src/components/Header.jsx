@@ -4,6 +4,8 @@ import { Link, useLocation } from 'react-router-dom';
 export default function Header({ currentPath = 'how-it-works' }) {
   const location = useLocation();
   const isContact = location.pathname.startsWith('/contact');
+  const isBenefits = location.pathname === '/benefits';
+  const isSafetyPrivacy = location.pathname === '/safety-privacy';
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
 
@@ -25,27 +27,27 @@ export default function Header({ currentPath = 'how-it-works' }) {
         {/* Navigation items */}
         <nav className="hidden md:flex items-center gap-0.5 lg:gap-1 shrink-0">
           <Link
-            to="/#benefits"
-            className="px-2 lg:px-4 py-2 rounded-full font-title-md text-title-md text-on-surface-variant hover:text-on-surface transition-colors"
+            to="/benefits"
+            className={`px-2 lg:px-4 py-2 rounded-full font-title-md text-title-md transition-colors ${isBenefits ? 'bg-surface-container-high text-on-surface' : 'text-on-surface-variant hover:text-on-surface'}`}
           >
             Benefits
           </Link>
           <Link
             to="/#how-it-works"
             className={`px-2 lg:px-4 py-2 rounded-full transition-colors ${
-              !isContact
+              !isContact && !isBenefits && !isSafetyPrivacy
                 ? 'bg-surface-container-high text-on-surface font-title-md'
                 : 'font-title-md text-title-md text-on-surface-variant hover:text-on-surface'
             }`}
           >
             How it works
           </Link>
-          <a
-            href="#safety-and-privacy"
-            className="px-2 lg:px-4 py-2 rounded-full font-title-md text-title-md text-on-surface-variant hover:text-on-surface transition-colors"
+          <Link
+            to="/safety-privacy"
+            className={`px-2 lg:px-4 py-2 rounded-full font-title-md text-title-md transition-colors ${isSafetyPrivacy ? 'bg-surface-container-high text-on-surface' : 'text-on-surface-variant hover:text-on-surface'}`}
           >
             Safety & Privacy
-          </a>
+          </Link>
         </nav>
 
         {/* CTA and mobile navigation */}
@@ -73,9 +75,9 @@ export default function Header({ currentPath = 'how-it-works' }) {
       {menuOpen && (
         <nav className="md:hidden border-t border-on-surface/10 bg-surface px-4 py-3 shadow-lg" aria-label="Mobile navigation">
           <div className="mx-auto max-w-[1200px] flex flex-col gap-1">
-            <Link onClick={closeMenu} to="/#benefits" className="rounded-xl px-4 py-3 font-title-md text-on-surface hover:bg-surface-container-high">Benefits</Link>
+            <Link onClick={closeMenu} to="/benefits" className="rounded-xl px-4 py-3 font-title-md text-on-surface hover:bg-surface-container-high">Benefits</Link>
             <Link onClick={closeMenu} to="/#how-it-works" className="rounded-xl px-4 py-3 font-title-md text-on-surface hover:bg-surface-container-high">How it works</Link>
-            <Link onClick={closeMenu} to="/#safety-and-privacy" className="rounded-xl px-4 py-3 font-title-md text-on-surface hover:bg-surface-container-high">Safety &amp; Privacy</Link>
+            <Link onClick={closeMenu} to="/safety-privacy" className="rounded-xl px-4 py-3 font-title-md text-on-surface hover:bg-surface-container-high">Safety &amp; Privacy</Link>
           </div>
         </nav>
       )}

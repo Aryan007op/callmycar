@@ -3,12 +3,16 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Home from './pages/Home';
 import Contact from './pages/Contact';
 import Register from './pages/Register';
+import Benefits from './pages/Benefits';
+import SafetyPrivacy from './pages/SafetyPrivacy';
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/benefits" element={<Benefits />} />
+        <Route path="/safety-privacy" element={<SafetyPrivacy />} />
         <Route path="/register" element={<Register />} />
         <Route path="/contact/:plate" element={<Contact />} />
         <Route path="/contact" element={<Navigate to="/contact/DL%2001%20AB%201234" replace />} />

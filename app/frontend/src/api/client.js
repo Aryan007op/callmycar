@@ -4,125 +4,54 @@ const BASE_URL = 'https://accommodations-utah-gifts-unique.trycloudflare.com';
 export const apiUrl = (path) => `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 
 export async function registerVehicle(vehicleData) {
-  try {
-    const res = await fetch(apiUrl('/api/register'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(vehicleData),
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {
-    console.warn('Backend unavailable, using simulated vehicle registration:', err);
+  const res = await fetch(apiUrl('/api/register'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(vehicleData),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.success === false) {
+    throw new Error(data.error || data.message || 'Vehicle registration failed.');
   }
-
-  return {
-    success: true,
-    message: `Vehicle ${vehicleData.plate} registered successfully!`,
-    vehicle: {
-      ...vehicleData,
-      displayName: `${vehicleData.color || ''} ${vehicleData.make || ''} ${vehicleData.model || ''} (${vehicleData.year || '2024'})`.trim(),
-      shieldStatus: 'Active Member Shield',
-      ownerMaskedPhone: '+1 (•••) •••-' + (vehicleData.ownerPhone ? vehicleData.ownerPhone.slice(-4) : '1234'),
-      registered: true,
-      verified: true,
-    },
-  };
+  return data;
 }
 
 export async function lookupVehicle(plate, state = 'NY') {
-  try {
-    const res = await fetch(apiUrl('/api/lookup'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plate, state }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return data.vehicle;
-    }
-  } catch (err) {
-    console.warn('Backend unavailable, using fallback mock:', err);
+  const res = await fetch(apiUrl('/api/lookup'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plate, state }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.vehicle) {
+    throw new Error(data.error || 'Vehicle lookup failed.');
   }
-
-  // Fallback mock
-  return {
-    plate: plate.toUpperCase(),
-    state: state.toUpperCase(),
-    displayName: 'Sapphire Blue Sedan (2022)',
-    registered: true,
-    verified: true,
-    responseEstimate: '~42 Seconds',
-    shieldStatus: 'Active Member Shield',
-    ownerMaskedPhone: '+1 (•••) •••-4291',
-  };
+  return data.vehicle;
 }
 
-export async function initiateCall({ plate, issue, urgency = 'urgent', ai_mode = 'bot', phone }) {
-  try {
-    const res = await fetch(apiUrl('/api/call'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plate, issue, urgency, ai_mode, phone }),
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {
-    console.warn('Backend unavailable, using simulated call session:', err);
+export async function initiateCall({ plate, issue, urgency = 'urgent', ai_mode = 'bot' }) {
+  const res = await fetch(apiUrl('/api/call'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plate, issue, urgency, ai_mode }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.success === false) {
+    throw new Error(data.error || 'The call could not be started.');
   }
-
-  return {
-    success: true,
-    callId: `mock_call_${Date.now()}`,
-    status: 'ringing',
-    message: `AI Voice Assistant is dialing the registered driver of ${plate}.`,
-  };
+  return data;
 }
 
-export async function getCallStatus(callId, elapsedSeconds = 0) {
-  try {
-    const res = await fetch(apiUrl(`/api/status/${callId}`));
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {
-    // fallback progression
+export async function getCallStatus(callId) {
+  const res = await fetch(apiUrl(`/api/status/${callId}`));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.success === false) {
+    throw new Error(data.error || 'Call status is unavailable.');
   }
-
-  if (elapsedSeconds < 4) {
-    return {
-      success: true,
-      status: 'ringing',
-      step: 1,
-      message: 'Ringing handset...',
-    };
-  } else if (elapsedSeconds < 8) {
-    return {
-      success: true,
-      status: 'answered',
-      step: 2,
-      message: 'Handset answered. Scrambling audio tunnel...',
-    };
-  } else if (elapsedSeconds < 16) {
-    return {
-      success: true,
-      status: 'speaking',
-      step: 3,
-      message: 'AI Butler speaking to owner respectfully...',
-    };
-  } else {
-    return {
-      success: true,
-      status: 'completed',
-      step: 4,
-      message: 'Owner responded: "On my way! 2 mins." Call ended successfully.',
-    };
-  }
+  return data;
 }
 
-export async function sendSms({ plate, message, phone }) {
+export async function sendSms({ plate, message, phone, additionalPhones = [] }) {
   try {
     // Sanitize plate number (remove spaces, special chars)
     const cleanPlate = (plate || '').replace(/\s+/g, '').toUpperCase();
@@ -134,6 +63,7 @@ export async function sendSms({ plate, message, phone }) {
         plateNumber: cleanPlate,
         customMessage: message,
         phone: phone || '',
+        additionalPhones,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -181,10 +111,6 @@ export async function sendTelegramAlert({ plate, message, chatId }) {
     });
     return await res.json();
   } catch (err) {
-    console.warn('Backend unavailable, using fallback Telegram response:', err);
-    return {
-      success: false,
-      error: err.message,
-    };
+    return { success: false, error: err.message || 'Telegram service is unavailable.' };
   }
 }

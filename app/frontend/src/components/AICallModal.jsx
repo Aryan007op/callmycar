@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { getCallStatus } from '../api/client';
 
-export default function AICallModal({ isOpen, onClose, plate = 'AA 1234', callId, issue = 'Driveway Blocked' }) {
+export default function AICallModal({ isOpen, onClose, plate = 'AA 1234', callId }) {
   const [elapsed, setElapsed] = useState(0);
   const [callState, setCallState] = useState({
     status: 'ringing',
-    message: 'Ringing handset...',
+    message: 'Checking call status…',
     step: 1,
   });
 
   useEffect(() => {
     if (!isOpen) {
       setElapsed(0);
-      setCallState({ status: 'ringing', message: 'Ringing handset...', step: 1 });
+      setCallState({ status: 'ringing', message: 'Checking call status…', step: 1 });
       return;
     }
 
@@ -22,6 +22,12 @@ export default function AICallModal({ isOpen, onClose, plate = 'AA 1234', callId
         if (callId) {
           getCallStatus(callId, next).then((data) => {
             if (data) setCallState(data);
+          }).catch((error) => {
+            setCallState({
+              status: 'unavailable',
+              message: error.message || 'Live call status is unavailable.',
+              step: 1,
+            });
           });
         }
         return next;
@@ -37,14 +43,18 @@ export default function AICallModal({ isOpen, onClose, plate = 'AA 1234', callId
   const progressPercent =
     callState.step === 1 ? '35%' : callState.step === 2 ? '65%' : callState.step === 3 ? '85%' : '100%';
 
-  const statusLabel =
-    callState.step === 1
-      ? 'Ringing Handset'
-      : callState.step === 2
-      ? 'Scrambling Audio Relay'
-      : callState.step === 3
-      ? 'AI Butler Speaking'
-      : 'Acknowledged by Owner';
+  const normalizedStatus = String(callState.status || '').toLowerCase();
+  const statusLabel = ['ended', 'completed'].includes(normalizedStatus)
+    ? 'Call ended'
+    : normalizedStatus === 'failed'
+      ? 'Call failed'
+      : normalizedStatus === 'in-progress'
+        ? 'Call in progress'
+        : ['ringing', 'queued'].includes(normalizedStatus)
+          ? 'Ringing owner'
+          : normalizedStatus === 'unavailable'
+            ? 'Status unavailable'
+            : 'Waiting for call status';
 
   return (
     <div
@@ -63,7 +73,7 @@ export default function AICallModal({ isOpen, onClose, plate = 'AA 1234', callId
               }`}
             ></div>
             <span className="font-label-md text-label-md text-tertiary uppercase tracking-wider">
-              {callState.step === 4 ? 'Call Resolved' : 'Calling Owner...'} ({elapsed}s)
+              {statusLabel} ({elapsed}s)
             </span>
           </div>
           <button
@@ -82,43 +92,14 @@ export default function AICallModal({ isOpen, onClose, plate = 'AA 1234', callId
             <span className="material-symbols-outlined text-on-primary-container text-[42px]">
               phone_in_talk
             </span>
-            {callState.step === 3 && (
-              <span className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-secondary text-on-secondary flex items-center justify-center text-[12px] font-bold animate-bounce">
-                AI
-              </span>
-            )}
           </div>
           <h3 className="font-headline-md text-headline-md text-on-surface">
-            Connecting to {plate}
+            Call for vehicle {plate}
           </h3>
           <p className="font-body-sm text-body-sm text-on-surface-variant">
-            {callState.step === 3 ? (
-              <span className="italic text-on-surface font-medium">
-                "Hello, this is CallMyCar. A polite civic notice regarding your vehicle ({issue}).
-                Please attend to your vehicle when free. Thank you!"
-              </span>
-            ) : (
-              callState.message ||
-              'AI Voice Assistant is dialing the registered driver. Your personal audio is scrambled and masked.'
-            )}
+            {callState.message || 'Checking the call status with the voice provider.'}
           </p>
         </div>
-
-        {/* Live Audio Visualizer Wave (active during step 3) */}
-        {callState.step === 3 && (
-          <div className="p-3 bg-secondary-fixed/40 rounded-xl border border-secondary/30 flex items-center justify-center gap-1.5">
-            {[40, 70, 100, 50, 80, 60, 95, 30, 85, 45].map((height, i) => (
-              <div
-                key={i}
-                className="w-1.5 bg-secondary rounded-full animate-pulse"
-                style={{
-                  height: `${height}%`,
-                  animationDuration: `${0.4 + (i % 5) * 0.15}s`,
-                }}
-              />
-            ))}
-          </div>
-        )}
 
         {/* Dynamic Status Progress Bar */}
         <div className="p-4 rounded-lg bg-surface-container-low space-y-2">
@@ -140,7 +121,7 @@ export default function AICallModal({ isOpen, onClose, plate = 'AA 1234', callId
           onClick={onClose}
           className="w-full py-3 rounded-full bg-error text-on-error font-headline-md text-title-md shadow-[3px_3px_0px_#111827] hover:bg-error/90 active:translate-x-0.5 active:translate-y-0.5 transition-all"
         >
-          {callState.step === 4 ? 'Dismiss & Close' : 'End Relay Call'}
+          {callState.step === 4 || normalizedStatus === 'unavailable' ? 'Close' : 'End Relay Call'}
         </button>
       </div>
     </div>

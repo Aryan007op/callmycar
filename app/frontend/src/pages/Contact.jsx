@@ -30,15 +30,12 @@ export default function Contact() {
   const [callSession, setCallSession] = useState(null);
   const [vehicle, setVehicle] = useState({
     plate: decodeURIComponent(plate),
-    displayName: 'Sapphire Blue Sedan (2022)',
-    responseEstimate: '~42 Seconds',
-    shieldStatus: 'Active Member Shield',
+    displayName: 'Vehicle details unavailable',
   });
   const [smsFeedback, setSmsFeedback] = useState('');
   const [targetPhone, setTargetPhone] = useState('');
   const [emergencyContact, setEmergencyContact] = useState('');
   const [targetChatId, setTargetChatId] = useState('');
-  const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [isSendingTelegram, setIsSendingTelegram] = useState(false);
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
 
@@ -66,8 +63,8 @@ export default function Contact() {
 
       if (!isMounted) return;
 
-      const registeredPhone = fbData?.phone || backendData?.ownerRealPhone || '';
-      const registeredEmergencyContact = fbData?.emergencyContact || backendData?.emergencyContact || '';
+      const registeredPhone = fbData?.phone || '';
+      const registeredEmergencyContact = fbData?.emergencyContact || '';
       const registeredChatId = fbData?.telegramChatId || backendData?.telegramChatId || '';
       const vehicleDesc = fbData?.make
         ? `${fbData.color || ''} ${fbData.make} ${fbData.model} (${fbData.year || ''})`.trim()
@@ -77,10 +74,8 @@ export default function Contact() {
         plate: decodedPlate,
         state: stateParam,
         displayName: vehicleDesc,
-        responseEstimate: backendData?.responseEstimate || '~30-45 Seconds',
-        shieldStatus: backendData?.shieldStatus || 'Active Member Shield',
-        registered: true,
-        verified: true,
+        registered: Boolean(fbData || backendData?.registered),
+        verified: Boolean(fbData || backendData?.verified),
         ownerRealPhone: registeredPhone,
         emergencyContact: registeredEmergencyContact,
         ownerMaskedPhone: registeredPhone ? maskPhoneNumber(registeredPhone) : (backendData?.ownerMaskedPhone || '+91 •••• ••••••'),
@@ -130,15 +125,18 @@ export default function Contact() {
   };
 
   const handleInitiateCall = async () => {
-    const res = await initiateCall({
-      plate: vehicle.plate,
-      issue: riskTier,
-      urgency,
-      ai_mode: aiMode,
-      phone: targetPhone || vehicle.ownerRealPhone,
-    });
-    setCallSession(res);
-    setIsModalOpen(true);
+    try {
+      const res = await initiateCall({
+        plate: vehicle.plate,
+        issue: riskTier,
+        urgency,
+        ai_mode: aiMode,
+      });
+      setCallSession(res);
+      setIsModalOpen(true);
+    } catch (error) {
+      alert(error.message || 'The call could not be started.');
+    }
   };
 
   const handleSendSms = async () => {
@@ -158,23 +156,15 @@ export default function Contact() {
         plate: vehicle.plate,
         message: messageText,
         phone: destPhone,
+        additionalPhones: isEmergency ? [emergencyContact] : [],
       });
       if (!res?.success || res.error) {
         alert(`WhatsApp error: ${res?.error || 'The server did not confirm that the alert was accepted.'}`);
       } else {
         if (isEmergency) {
-          const emergencyRes = await sendSms({
-            plate: vehicle.plate,
-            message: messageText,
-            phone: emergencyContact,
-          });
-          if (!emergencyRes?.success || emergencyRes.error) {
-            alert(`Owner was alerted, but the emergency contact message failed: ${emergencyRes?.error || 'delivery was not confirmed.'}`);
-            return;
-          }
-          setSmsFeedback(`Emergency WhatsApp alerts accepted for the owner and emergency contact (${emergencyContact}).`);
+          setSmsFeedback(`Emergency WhatsApp alerts accepted for the owner and emergency contact (${maskPhoneNumber(emergencyContact)}).`);
         } else {
-          setSmsFeedback(`WhatsApp alert accepted by the provider for ${destPhone}${res.status ? ` (status: ${res.status})` : ''}.`);
+          setSmsFeedback(`WhatsApp alert accepted by the provider for ${maskPhoneNumber(destPhone)}${res.status ? ` (status: ${res.status})` : ''}.`);
         }
         setTimeout(() => {
           setSmsFeedback('');
@@ -301,17 +291,16 @@ export default function Contact() {
                         {vehicle.plate}
                       </span>
                       <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-label-md text-label-md shadow-[2px_2px_0px_#111827]">
-                        <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                        Community Verified
-                      </span>
-                      <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-md text-label-md">
-                        {vehicle.shieldStatus || 'Active Member Shield'}
+                        <span className="material-symbols-outlined text-[16px]">{vehicle.registered ? 'check_circle' : 'help'}</span>
+                        {vehicle.registered ? 'Registered' : 'Not registered'}
                       </span>
                     </div>
                     <p className="font-body-md text-body-md text-on-surface-variant pt-1">
-                      Registered vehicle detected:{' '}
-                      <strong className="text-on-surface">{vehicle.displayName}</strong>. Direct
-                      encrypted ping is active and standing by.
+                      {vehicle.registered ? (
+                        <>Registered vehicle: <strong className="text-on-surface">{vehicle.displayName}</strong>. Owner contact details stay private.</>
+                      ) : (
+                        'This vehicle could not be found in the registration directory.'
+                      )}
                     </p>
                   </div>
                 </div>
@@ -320,15 +309,15 @@ export default function Contact() {
                 <div className="flex items-center gap-3 shrink-0 z-10">
                   <div className="flex flex-col text-left lg:text-right">
                     <span className="font-label-md text-label-md uppercase text-on-surface-variant">
-                      Response Time
+                      Owner contact
                     </span>
-                    <span className="font-headline-md text-headline-md text-tertiary">
-                      {vehicle.responseEstimate || '~42 Seconds'}
+                    <span className="font-headline-md text-title-md text-tertiary">
+                      {vehicle.ownerMaskedPhone || 'Private'}
                     </span>
                   </div>
                   <div className="w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center shadow-[2px_2px_0px_#111827]">
                     <span className="material-symbols-outlined text-on-secondary-container text-[24px]">
-                      timer
+                      lock
                     </span>
                   </div>
                 </div>
@@ -615,36 +604,19 @@ export default function Contact() {
                             Active Relay Delivery Destinations
                           </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setIsEditingTarget(!isEditingTarget)}
-                          className="px-2.5 py-1 rounded-full bg-surface-container font-label-sm text-[12px] text-on-surface shadow-[1.5px_1.5px_0px_#111827] hover:bg-secondary-fixed transition-colors cursor-pointer"
-                        >
-                          {isEditingTarget ? 'Done Testing' : 'Edit / Override Targets'}
-                        </button>
                       </div>
 
-                      {isEditingTarget ? (
-                        <div className="space-y-3 pt-1">
-                          <div>
-                            <label className="block text-xs font-bold uppercase text-on-surface-variant mb-1">
-                              Target Phone (WhatsApp & Voice Call)
-                            </label>
-                            <input
-                              type="tel"
-                              value={targetPhone}
-                              onChange={(e) => setTargetPhone(e.target.value)}
-                              placeholder="+91 98765 43210"
-                              className="w-full h-10 px-3 rounded-lg bg-surface-container font-mono text-sm text-on-surface border border-on-surface/20 focus:outline-none"
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-sm">
                           <div className="p-2.5 bg-surface-container rounded-lg">
                             <span className="text-xs uppercase text-on-surface-variant block font-bold">WhatsApp & Voice:</span>
                             <span className="font-mono text-on-surface font-semibold">
-                              {targetPhone || vehicle.ownerRealPhone || vehicle.ownerMaskedPhone || 'None configured'}
+                              {targetPhone ? maskPhoneNumber(targetPhone) : vehicle.ownerMaskedPhone || 'None configured'}
+                            </span>
+                          </div>
+                          <div className="p-2.5 bg-surface-container rounded-lg">
+                            <span className="text-xs uppercase text-on-surface-variant block font-bold">Emergency contact:</span>
+                            <span className="font-mono text-on-surface font-semibold">
+                              {emergencyContact ? maskPhoneNumber(emergencyContact) : 'None configured'}
                             </span>
                           </div>
                           <div className="p-2.5 bg-surface-container rounded-lg">
@@ -657,8 +629,7 @@ export default function Contact() {
                               )}
                             </span>
                           </div>
-                        </div>
-                      )}
+                      </div>
 
                       <div className="text-[11px] text-on-surface-variant">
                         Telegram alerts go to the account paired by this vehicle's owner.
@@ -689,7 +660,7 @@ export default function Contact() {
                         <span>{isSendingTelegram ? 'Sending Telegram...' : 'Send Telegram Alert'}</span>
                       </button>
                       <p className="font-body-sm text-body-sm text-center text-on-surface-variant mt-2.5">
-                        Delivered within seconds via Push + SMS Gateway
+                        The alert status updates after the messaging service responds.
                       </p>
                     </div>
                 </div>

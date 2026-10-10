@@ -7,12 +7,13 @@ dotenv.config(); // Fallback for root CWD
 
 const express = require('express');
 const cors = require('cors');
-const twilio = require('twilio');
 const admin = require('firebase-admin');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const assistantReportAttempts = new Map();
+const vehicleAlertCooldowns = new Map();
+const VEHICLE_ALERT_COOLDOWN_MS = 2 * 60 * 1000;
 
 let whatsappWebService = null;
 if (!process.env.VERCEL) {
@@ -25,16 +26,6 @@ if (!process.env.VERCEL) {
 
 function getWhatsAppWebService() {
   return whatsappWebService;
-}
-
-// Initialize Twilio client safely after dotenv has loaded
-let twilioClient = null;
-if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-  try {
-    twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  } catch (err) {
-    console.warn('Twilio initialization warning:', err.message);
-  }
 }
 
 app.use(cors());
@@ -56,80 +47,10 @@ app.get('/api/whatsapp-status', (_req, res) => {
   return res.json({ success: true, ready: whatsappWeb.isReady(), ...status });
 });
 
-// In-memory registered vehicles database (Mock VAHAN database)
-const VEHICLE_DATABASE = {
-  'AA 1234': {
-    plate: 'AA 1234',
-    state: 'NY',
-    make: 'Honda',
-    model: 'Civic Sedan',
-    year: '2022',
-    color: 'Sapphire Blue',
-    displayName: 'Sapphire Blue Sedan (2022)',
-    registered: true,
-    verified: true,
-    responseEstimate: '~42 Seconds',
-    shieldStatus: 'Active Member Shield',
-    ownerMaskedPhone: '+1 (•••) •••-4291',
-    ownerRealPhone: '+15550194291',
-    notifyCall: true,
-    notifySms: true,
-  },
-  '782 WXY': {
-    plate: '782 WXY',
-    state: 'CA',
-    make: 'Tesla',
-    model: 'Model 3',
-    year: '2023',
-    color: 'Pearl White',
-    displayName: 'Pearl White Sedan (2023)',
-    registered: true,
-    verified: true,
-    responseEstimate: '~35 Seconds',
-    shieldStatus: 'Active Member Shield',
-    ownerMaskedPhone: '+1 (•••) •••-8812',
-    ownerRealPhone: '+15550198812',
-    notifyCall: true,
-    notifySms: true,
-  },
-  '4XYZ 890': {
-    plate: '4XYZ 890',
-    state: 'WA',
-    make: 'Toyota',
-    model: 'RAV4',
-    year: '2021',
-    color: 'Midnight Black',
-    displayName: 'Midnight Black SUV (2021)',
-    registered: true,
-    verified: true,
-    responseEstimate: '~50 Seconds',
-    shieldStatus: 'Active Member Shield',
-    ownerMaskedPhone: '+1 (•••) •••-3049',
-    ownerRealPhone: '+15550193049',
-    notifyCall: true,
-    notifySms: true,
-  },
-  'DL 01 AB 1234': {
-    plate: 'DL 01 AB 1234',
-    state: 'DL',
-    make: 'Honda',
-    model: 'City',
-    year: '2021',
-    color: 'Modern Steel',
-    displayName: 'Modern Steel Sedan (2021)',
-    registered: true,
-    verified: true,
-    responseEstimate: '~40 Seconds',
-    shieldStatus: 'Active Member Shield',
-    ownerMaskedPhone: '+91 98•••• 1234',
-    ownerRealPhone: '+919800001234',
-    notifyCall: true,
-    notifySms: true,
-  },
-};
+// Vehicles created during this server process; Firestore remains the source of truth.
+const VEHICLE_DATABASE = {};
 
 // In-memory call session tracking
-const activeCalls = new Map();
 
 // Helper to normalize license plates
 function normalizePlate(plate) {
@@ -138,6 +59,45 @@ function normalizePlate(plate) {
 
 function getVehicleDocumentId(plate) {
   return normalizePlate(plate).replace(/\s+/g, '');
+}
+
+function reserveVehicleAlertCooldown(plateOrKey) {
+  const key = getVehicleDocumentId(plateOrKey);
+  if (!key) return { allowed: true, key: null, token: null };
+
+  const now = Date.now();
+  for (const [storedKey, timestamp] of vehicleAlertCooldowns) {
+    if (now - timestamp >= VEHICLE_ALERT_COOLDOWN_MS) vehicleAlertCooldowns.delete(storedKey);
+  }
+
+  const lastAlertAt = vehicleAlertCooldowns.get(key);
+  if (lastAlertAt && now - lastAlertAt < VEHICLE_ALERT_COOLDOWN_MS) {
+    return {
+      allowed: false,
+      key,
+      remainingSeconds: Math.ceil((VEHICLE_ALERT_COOLDOWN_MS - (now - lastAlertAt)) / 1000),
+    };
+  }
+
+  vehicleAlertCooldowns.set(key, now);
+  return { allowed: true, key, token: now };
+}
+
+function releaseVehicleAlertCooldown(reservation) {
+  if (reservation?.key && vehicleAlertCooldowns.get(reservation.key) === reservation.token) {
+    vehicleAlertCooldowns.delete(reservation.key);
+  }
+}
+
+function rejectDuringCooldown(res, reservation) {
+  if (reservation.allowed) return false;
+  res.set('Retry-After', String(reservation.remainingSeconds));
+  res.status(429).json({
+    success: false,
+    error: `Please wait ${reservation.remainingSeconds} seconds before sending another alert for this vehicle.`,
+    retryAfterSeconds: reservation.remainingSeconds,
+  });
+  return true;
 }
 
 function normalizePhoneToE164(phone) {
@@ -254,7 +214,7 @@ async function findVehicleForAssistantReport(cleanPlate) {
 // Helper to mask phone numbers for zero-knowledge privacy
 function maskPhoneNumber(phone) {
   if (!phone) return '+1 (•••) •••-••••';
-  const clean = phone.replace(/[^0-9+]/g, '');
+  const clean = String(phone).replace(/[^0-9+]/g, '');
   if (clean.length < 4) return '••-••••';
   const lastFour = clean.slice(-4);
   return `+•• (•••) •••-${lastFour}`;
@@ -285,7 +245,7 @@ app.post('/api/register', (req, res) => {
     return res.status(400).json({ error: 'License plate number is required.' });
   }
 
-  const displayName = `${color} ${make} ${model} (${year})`;
+  const displayName = [color, make, model, year ? `(${year})` : ''].filter(Boolean).join(' ') || 'Registered Vehicle';
   const maskedPhone = maskPhoneNumber(ownerPhone);
 
   const vehicleRecord = {
@@ -298,7 +258,6 @@ app.post('/api/register', (req, res) => {
     displayName,
     registered: true,
     verified: true,
-    responseEstimate: '~30-45 Seconds',
     shieldStatus: 'Active Member Shield',
     ownerMaskedPhone: maskedPhone,
     ownerRealPhone: ownerPhone,
@@ -334,7 +293,7 @@ app.post('/api/register', (req, res) => {
  * POST /api/lookup
  * Query vehicle registration by plate number
  */
-app.post('/api/lookup', (req, res) => {
+app.post('/api/lookup', async (req, res) => {
   const { plate = '', state = 'NY' } = req.body;
   const cleanPlate = normalizePlate(plate);
 
@@ -342,41 +301,32 @@ app.post('/api/lookup', (req, res) => {
     return res.status(400).json({ error: 'License plate number is required.' });
   }
 
-  // Check mock DB or generate a default verified civic entry
-  let vehicle = VEHICLE_DATABASE[cleanPlate];
-
-  if (!vehicle) {
-    vehicle = {
-      plate: cleanPlate,
-      state: state.toUpperCase(),
-      make: 'Verified',
-      model: 'Passenger Vehicle',
-      year: '2023',
-      color: 'Sapphire Blue',
-      displayName: `Sapphire Blue Sedan (2023)`,
-      registered: true,
-      verified: true,
-      responseEstimate: '~45 Seconds',
-      shieldStatus: 'Active Member Shield',
-      ownerMaskedPhone: '+1 (•••) •••-1290',
-      ownerRealPhone: '+15550191290',
-    };
+  const documentId = getVehicleDocumentId(cleanPlate);
+  let vehicle;
+  try {
+    vehicle = await findVehicleForAssistantReport(documentId);
+  } catch (error) {
+    console.error('[Vehicle lookup error]', error.message);
+    return res.status(503).json({ success: false, error: 'Vehicle lookup is temporarily unavailable.' });
   }
+  if (!vehicle) {
+    return res.status(404).json({ success: false, error: 'This vehicle is not registered.' });
+  }
+
+  const ownerPhone = vehicle.ownerRealPhone || vehicle.ownerPhone || vehicle.phone || '';
+  const displayName = vehicle.displayName || [vehicle.color, vehicle.make, vehicle.model, vehicle.year ? `(${vehicle.year})` : ''].filter(Boolean).join(' ') || 'Registered Vehicle';
 
   res.json({
     success: true,
     vehicle: {
-      plate: vehicle.plate,
-      state: vehicle.state,
-      displayName: vehicle.displayName,
-      registered: vehicle.registered,
-      verified: vehicle.verified,
-      responseEstimate: vehicle.responseEstimate,
-      shieldStatus: vehicle.shieldStatus,
-      ownerMaskedPhone: vehicle.ownerMaskedPhone,
-      ownerRealPhone: vehicle.ownerRealPhone,
-      emergencyContact: vehicle.emergencyContact || '',
-      telegramChatId: vehicle.telegramChatId || '',
+      plate: vehicle.plateDisplay || vehicle.plate || vehicle.plateNumber || cleanPlate,
+      state: vehicle.state || state.toUpperCase(),
+      displayName,
+      registered: true,
+      verified: true,
+      shieldStatus: vehicle.shieldStatus || '',
+      ownerMaskedPhone: vehicle.ownerMaskedPhone || maskPhoneNumber(ownerPhone),
+      telegramPaired: Boolean(vehicle.telegramChatId),
     },
   });
 });
@@ -386,25 +336,37 @@ app.post('/api/lookup', (req, res) => {
  * Trigger automated AI Voice Agent call to vehicle owner
  */
 app.post('/api/call', async (req, res) => {
-  const { plate, issue = 'Driveway Blocked', urgency = 'urgent', ai_mode = 'bot', phone } = req.body;
+  const { plate, issue = 'Driveway Blocked', urgency = 'urgent', ai_mode = 'bot' } = req.body;
   const cleanPlate = normalizePlate(plate);
-  const vehicle = VEHICLE_DATABASE[cleanPlate] || {
-    plate: cleanPlate || 'AA 1234',
-    displayName: 'Registered Vehicle',
-    responseEstimate: '~42 Seconds',
-    ownerRealPhone: phone || '+15550194291',
-  };
-  if (phone) {
-    vehicle.ownerRealPhone = phone;
+  if (!cleanPlate) {
+    return res.status(400).json({ success: false, error: 'License plate number is required.' });
   }
+  let vehicle;
+  try {
+    vehicle = await findVehicleForAssistantReport(getVehicleDocumentId(cleanPlate));
+  } catch (error) {
+    console.error('[Call vehicle lookup error]', error.message);
+    return res.status(503).json({ success: false, error: 'Vehicle lookup is temporarily unavailable.' });
+  }
+  if (!vehicle) return res.status(404).json({ success: false, error: 'This vehicle is not registered.' });
+  const ownerPhone = vehicle.ownerRealPhone || vehicle.ownerPhone || vehicle.phone || '';
+  const displayPlate = vehicle.plateDisplay || vehicle.plate || vehicle.plateNumber || cleanPlate;
+  const displayName = vehicle.displayName || `${vehicle.color || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'Registered Vehicle';
+  if (!ownerPhone) return res.status(400).json({ success: false, error: 'This vehicle has no owner phone number registered.' });
+  if (!process.env.VAPI_API_KEY || !process.env.VAPI_ASSISTANT_ID) {
+    return res.status(503).json({ success: false, error: 'Voice calling is not configured.' });
+  }
+
+  const cooldownReservation = reserveVehicleAlertCooldown(cleanPlate);
+  if (rejectDuringCooldown(res, cooldownReservation)) return;
 
   const callId = `call_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const startTime = Date.now();
 
   const session = {
     callId,
-    plate: vehicle.plate,
-    vehicleDesc: vehicle.displayName,
+    plate: displayPlate,
+    vehicleDesc: displayName,
     issue,
     urgency,
     ai_mode,
@@ -413,18 +375,14 @@ app.post('/api/call', async (req, res) => {
     step: 1,
     history: [
       { timestamp: new Date().toISOString(), status: 'Initiating encrypted relay proxy' },
-      { timestamp: new Date().toISOString(), status: `Dialing owner of ${vehicle.plate}` },
+      { timestamp: new Date().toISOString(), status: `Dialing owner of ${displayPlate}` },
     ],
   };
-
-  activeCalls.set(callId, session);
 
   // Vapi AI voice dispatch
   if (process.env.VAPI_API_KEY && process.env.VAPI_ASSISTANT_ID) {
     try {
-      console.log(`[Vapi.ai] Dispatching real voice agent call for ${vehicle.plate} (Assistant: ${process.env.VAPI_ASSISTANT_ID})`);
-      if (vehicle.ownerRealPhone) {
-        const vapiResponse = await fetch('https://api.vapi.ai/call/phone', {
+      const vapiResponse = await fetch('https://api.vapi.ai/call/phone', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
@@ -433,73 +391,34 @@ app.post('/api/call', async (req, res) => {
           body: JSON.stringify({
             assistantId: process.env.VAPI_ASSISTANT_ID,
             customer: {
-              number: vehicle.ownerRealPhone,
+              number: ownerPhone,
             },
             assistantOverrides: {
               variableValues: {
-                plate: vehicle.plate,
-                vehicleDesc: vehicle.displayName,
+                plate: displayPlate,
+                vehicleDesc: displayName,
                 issue: issue,
               },
             },
           }),
         });
-        const vapiData = await vapiResponse.json();
-        console.log('[Vapi.ai Response]', vapiData);
-        // Store Vapi call ID for status polling
-        if (vapiData.id) {
-          session.vapiCallId = vapiData.id;
-          activeCalls.set(vapiData.id, session);
-        }
+      const vapiData = await vapiResponse.json();
+      if (!vapiResponse.ok || !vapiData.id) {
+        throw new Error(vapiData.message || vapiData.error || 'Voice provider rejected the call request.');
       }
+      session.vapiCallId = vapiData.id;
     } catch (err) {
+      releaseVehicleAlertCooldown(cooldownReservation);
       console.error('[Vapi.ai Error]', err.message);
-    }
-  }
-
-  // Bland.ai dispatch fallback
-  if (process.env.BLAND_AI_API_KEY && process.env.BLAND_AI_PHONE_NUMBER) {
-    try {
-      console.log(`[Bland.ai] Dispatching voice agent call for ${vehicle.plate}`);
-    } catch (err) {
-      console.error('[Bland.ai Error]', err.message);
-    }
-  }
-
-  // Twilio voice call fallback (for international numbers)
-  let callInitiated = session.vapiCallId ? true : false;
-  if (!callInitiated && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PROXY_NUMBER) {
-    try {
-      console.log(`[Twilio] Dispatching voice call for ${vehicle.plate} to ${vehicle.ownerRealPhone}`);
-      const twilioCall = await twilioClient.calls.create({
-        to: vehicle.ownerRealPhone,
-        from: process.env.TWILIO_PROXY_NUMBER,
-        twiml: `<Response><Say voice="alice">Hello, this is CallMyCar calling regarding your vehicle ${vehicle.plate}. ${issue}. Please attend to your vehicle when free. Thank you.</Say></Response>`,
-      });
-      console.log('[Twilio Call Response]', twilioCall.sid);
-      session.twilioCallSid = twilioCall.sid;
-      session.status = 'ringing';
-      activeCalls.set(twilioCall.sid, session);
-      callInitiated = true;
-    } catch (err) {
-      console.error('[Twilio Error]', err.message);
-    }
-  }
-
-  // Bland.ai dispatch fallback
-  if (!callInitiated && process.env.BLAND_AI_API_KEY && process.env.BLAND_AI_PHONE_NUMBER) {
-    try {
-      console.log(`[Bland.ai] Dispatching voice agent call for ${vehicle.plate}`);
-    } catch (err) {
-      console.error('[Bland.ai Error]', err.message);
+      return res.status(502).json({ success: false, error: err.message || 'Voice call failed to start.' });
     }
   }
 
   res.json({
     success: true,
-    callId: session.twilioCallSid || session.vapiCallId || callId,
+    callId: session.vapiCallId,
     status: 'ringing',
-    message: `AI Voice Assistant is dialing the registered driver of ${vehicle.plate}.`,
+    message: `AI Voice Assistant is dialing the registered driver of ${displayPlate}.`,
     session,
   });
 });
@@ -510,99 +429,54 @@ app.post('/api/call', async (req, res) => {
  */
 app.get('/api/status/:callId', async (req, res) => {
   const { callId } = req.params;
-  const session = activeCalls.get(callId);
+  if (!process.env.VAPI_API_KEY) {
+    return res.status(503).json({ success: false, error: 'Voice call status is not configured.' });
+  }
 
-  // If not found locally, check Vapi
-  if (!session && process.env.VAPI_API_KEY) {
-    try {
-      const vapiRes = await fetch(`https://api.vapi.ai/call/${callId}`, {
-        headers: { 'Authorization': `Bearer ${process.env.VAPI_API_KEY}` },
-      });
-      if (vapiRes.ok) {
-        const vapiData = await vapiRes.json();
-        return res.json({
-          success: true,
-          callId,
-          status: vapiData.status || 'unknown',
-          step: vapiData.status === 'ended' ? 4 : 2,
-          message: `Vapi call status: ${vapiData.status}`,
-          vapiData,
-        });
-      }
-    } catch (err) {
-      console.error('[Vapi status fetch error]', err.message);
+  try {
+    const response = await fetch(`https://api.vapi.ai/call/${encodeURIComponent(callId)}`, {
+      headers: { Authorization: `Bearer ${process.env.VAPI_API_KEY}` },
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return res.status(response.status).json({ success: false, error: data.message || data.error || 'Could not retrieve call status.' });
     }
+
+    const status = data.status || 'unknown';
+    const completed = ['ended', 'completed', 'failed'].includes(status.toLowerCase());
+    return res.json({
+      success: true,
+      callId,
+      status,
+      step: completed ? 4 : status.toLowerCase() === 'in-progress' ? 2 : 1,
+      message: `Voice provider status: ${status}`,
+    });
+  } catch (error) {
+    console.error('[Voice status error]', error.message);
+    return res.status(502).json({ success: false, error: 'Could not retrieve live call status.' });
   }
-
-  // If not found, check Twilio
-  if (!session && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-    try {
-      const twilioCall = await twilioClient.calls(callId).fetch();
-      return res.json({
-        success: true,
-        callId,
-        status: twilioCall.status,
-        step: twilioCall.status === 'completed' ? 4 : 2,
-        message: `Twilio call status: ${twilioCall.status}`,
-        twilioData: twilioCall,
-      });
-    } catch (err) {
-      console.error('[Twilio status fetch error]', err.message);
-    }
-  }
-
-  if (!session) {
-    return res.status(404).json({ error: 'Call session not found' });
-  }
-
-  const elapsedSeconds = Math.floor((Date.now() - session.startTime) / 1000);
-
-  if (elapsedSeconds < 4) {
-    session.status = 'ringing';
-    session.step = 1;
-    session.message = 'Ringing handset...';
-  } else if (elapsedSeconds < 8) {
-    session.status = 'answered';
-    session.step = 2;
-    session.message = 'Handset answered. Scrambling audio tunnel...';
-  } else if (elapsedSeconds < 16) {
-    session.status = 'speaking';
-    session.step = 3;
-    session.message = `AI Butler speaking: "Hello, this is CallMyCar regarding your vehicle (${session.issue})..."`;
-  } else {
-    session.status = 'completed';
-    session.step = 4;
-    session.message = 'Owner acknowledged notice: "On my way! 2 mins." Call ended.';
-  }
-
-  res.json({
-    success: true,
-    ...session,
-    elapsedSeconds,
-  });
 });
-
 /**
  * POST /api/sms
  * Send a WhatsApp alert through the authenticated WhatsApp Web session
  */
 app.post('/api/sms', async (req, res) => {
-  console.log("Payload received:", req.body);
-  console.log('Incoming /api/sms headers:', req.headers);
-
   if (!req.body || Object.keys(req.body).length === 0) {
     return res.status(400).json({ error: 'Empty request body received by server' });
   }
 
+  let cooldownReservation;
+  let deliveredCount = 0;
   try {
     const body = req.body || {};
     const plateNumber = body.plateNumber || body.licensePlate || '';
     const customMessage = body.customMessage || body.message || 'Please move your vehicle!';
     
-    const cleanPlate = plateNumber.replace(/\s+/g, '').toUpperCase();
-    const vehicle = cleanPlate ? VEHICLE_DATABASE[cleanPlate] : null;
-
-    let targetPhone = body.phone || (vehicle && vehicle.ownerRealPhone) || process.env.DEFAULT_ALERT_PHONE || '';
+    const cleanPlate = getVehicleDocumentId(plateNumber);
+    const vehicle = !body.phone && cleanPlate
+      ? await findVehicleForAssistantReport(getVehicleDocumentId(cleanPlate))
+      : null;
+    let targetPhone = body.phone || vehicle?.ownerRealPhone || vehicle?.ownerPhone || vehicle?.phone || '';
     targetPhone = normalizePhoneToE164(targetPhone);
     if (!targetPhone) {
       return res.status(400).json({ error: 'Enter a valid phone number with its country code (or a 10-digit Indian number).' });
@@ -616,10 +490,29 @@ app.post('/api/sms', async (req, res) => {
       return res.status(503).json({ error: 'WhatsApp is not authenticated. Scan the QR code shown in the backend terminal, then try again.' });
     }
 
-    const message = await whatsappWeb.sendAlert({ ownerPhone: targetPhone, plateNumber: cleanPlate || 'ALERT', issue: customMessage });
-    console.log('WhatsApp Web message sent:', message?.id?._serialized);
-    return res.status(200).json({ success: true, messageId: message?.id?._serialized || null, status: 'sent', targetPhone });
+    const additionalPhones = Array.isArray(body.additionalPhones) ? body.additionalPhones : [];
+    const recipients = [targetPhone, ...additionalPhones.map(normalizePhoneToE164)];
+    if (recipients.some((phone) => !phone)) {
+      return res.status(400).json({ error: 'An additional alert recipient has an invalid phone number.' });
+    }
+    cooldownReservation = reserveVehicleAlertCooldown(cleanPlate || targetPhone);
+    if (rejectDuringCooldown(res, cooldownReservation)) return;
+
+    const messages = [];
+    for (const recipient of [...new Set(recipients)]) {
+      const message = await whatsappWeb.sendAlert({ ownerPhone: recipient, plateNumber: cleanPlate || 'ALERT', issue: customMessage });
+      messages.push(message);
+      deliveredCount += 1;
+    }
+    console.log('WhatsApp Web message(s) sent:', messages.map((message) => message?.id?._serialized).filter(Boolean));
+    return res.status(200).json({
+      success: true,
+      messageId: messages[0]?.id?._serialized || null,
+      recipientCount: messages.length,
+      status: 'sent',
+    });
   } catch (error) {
+    if (deliveredCount === 0) releaseVehicleAlertCooldown(cooldownReservation);
     console.error("WhatsApp error:", error);
     return res.status(500).json({ error: error.message || 'Failed to send WhatsApp message' });
   }
@@ -691,6 +584,7 @@ app.post('/api/telegram-webhook', async (req, res) => {
 
 /** Send alerts only to the Telegram account stored on the matching Firestore vehicle. */
 app.post('/api/telegram-alert', async (req, res) => {
+  let cooldownReservation;
   try {
     const body = req.body || {};
     const plateNumber = body.plateNumber || body.licensePlate || '';
@@ -709,9 +603,12 @@ app.post('/api/telegram-alert', async (req, res) => {
     const customMessage = body.customMessage || body.message || 'Please move your vehicle immediately!';
     const displayPlate = vehicle.plateDisplay || vehicle.plate || vehicle.plateNumber || cleanPlate;
     const messageText = `🚨 *CALLMYCAR VEHICLE ALERT* 🚨\n\n🚗 *Vehicle:* \`${displayPlate}\`\n💬 *Message:* ${customMessage}\n\n⏰ *Time:* ${new Date().toLocaleTimeString()}`;
+    cooldownReservation = reserveVehicleAlertCooldown(cleanPlate);
+    if (rejectDuringCooldown(res, cooldownReservation)) return;
     const result = await sendTelegramMessage(String(chatId), messageText, 'Markdown');
     return res.status(200).json({ success: true, messageId: result.result?.message_id });
   } catch (error) {
+    releaseVehicleAlertCooldown(cooldownReservation);
     console.error('Telegram alert failed:', error.message);
     return res.status(500).json({ success: false, message: error.message || 'Failed to send Telegram message.' });
   }
@@ -746,6 +643,7 @@ app.post('/api/assistant-report', async (req, res) => {
   const issue = getAssistantValue(body, ['issue', 'problem', 'report', 'reason'])
     .slice(0, 250) || 'a vehicle issue';
   const urgency = getAssistantValue(body, ['urgency', 'priority']).slice(0, 40) || 'standard';
+  let cooldownReservation;
 
   try {
     const vehicle = await findVehicleForAssistantReport(cleanPlate);
@@ -758,6 +656,8 @@ app.post('/api/assistant-report', async (req, res) => {
       });
     }
 
+    cooldownReservation = reserveVehicleAlertCooldown(cleanPlate);
+    if (rejectDuringCooldown(res, cooldownReservation)) return;
     const displayPlate = String(vehicle.plateDisplay || vehicle.plate || vehicle.plateNumber || cleanPlate);
     const delivery = await dispatchAssistantReport(vehicle, cleanPlate, issue, urgency);
     return res.status(200).json({
@@ -767,6 +667,7 @@ app.post('/api/assistant-report', async (req, res) => {
       channel: delivery.channel,
     });
   } catch (error) {
+    releaseVehicleAlertCooldown(cooldownReservation);
     console.error('[Assistant report] Could not process voice report:', error.message);
     return res.status(502).json({
       fulfillmentText: 'Sorry, I could not send that vehicle alert right now. Please try again later.',
@@ -800,8 +701,8 @@ const telegramWebhookReady = configureTelegramWebhook();
  * Expected JSON body: { ownerPhone, plateNumber, issue }
  */
 app.post('/api/send-alert', async (req, res) => {
-  console.log("Payload received:", req.body);
   const whatsappWeb = getWhatsAppWebService();
+  let cooldownReservation;
 
   // Check if WhatsApp client has actually fired the ready event
   if (!whatsappWeb?.isReady()) {
@@ -826,16 +727,18 @@ app.post('/api/send-alert', async (req, res) => {
       });
     }
 
-    const recipient = whatsappWeb.formatIndianPhoneNumber(rawPhone);
+    cooldownReservation = reserveVehicleAlertCooldown(plateNumber);
+    if (rejectDuringCooldown(res, cooldownReservation)) return;
     const result = await whatsappWeb.sendAlert({ ownerPhone: rawPhone, plateNumber, issue });
 
     return res.status(200).json({
       success: true,
       message: 'WhatsApp alert sent successfully',
-      recipient,
+      recipient: maskPhoneNumber(rawPhone),
       messageId: result?.id?._serialized || null
     });
   } catch (error) {
+    releaseVehicleAlertCooldown(cooldownReservation);
     console.error("WhatsApp error:", error);
     return res.status(500).json({
       success: false,
