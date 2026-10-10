@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import Benefits from '../components/Benefits';
+import SafetyPrivacy from '../components/SafetyPrivacy';
 import { lookupVehicle, sendAssistantReport } from '../api/client';
 
 export default function Home() {
@@ -422,6 +424,27 @@ export default function Home() {
                         >
                           MH • MH 02 CZ 9999
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectDemoPlate('KA', 'KA 03 MX 4020')}
+                          className="px-3 py-1 rounded-full bg-surface-container font-label-md text-label-md text-on-surface shadow-[2px_2px_0px_#141b2b] hover:bg-secondary-fixed transition-colors"
+                        >
+                          KA • KA 03 MX 4020
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectDemoPlate('HR', 'HR 26 DK 8888')}
+                          className="px-3 py-1 rounded-full bg-surface-container font-label-md text-label-md text-on-surface shadow-[2px_2px_0px_#141b2b] hover:bg-secondary-fixed transition-colors"
+                        >
+                          HR • HR 26 DK 8888
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectDemoPlate('UP', 'UP 16 BK 5555')}
+                          className="px-3 py-1 rounded-full bg-surface-container font-label-md text-label-md text-on-surface shadow-[2px_2px_0px_#141b2b] hover:bg-secondary-fixed transition-colors"
+                        >
+                          UP • UP 16 BK 5555
+                        </button>
                       </div>
 
                       {/* Big Tactile Proceed Action Button */}
@@ -563,6 +586,9 @@ export default function Home() {
             </div>
           </section>
 
+          {/* BENEFITS SECTION */}
+          <Benefits />
+
           {/* HOW IT WORKS BENTO GRID */}
           <section className="w-full bg-surface-container-low py-12 sm:py-20" id="how-it-works">
             <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-10">
@@ -639,6 +665,9 @@ export default function Home() {
               </div>
             </div>
           </section>
+
+          {/* SAFETY & PRIVACY SECTION */}
+          <SafetyPrivacy />
 
           {/* CIVIC COMMUNITY PLEDGE BANNER */}
           <section className="w-full bg-on-surface py-14">

@@ -40,12 +40,12 @@ export default function Header({ currentPath = 'how-it-works' }) {
           >
             How it works
           </Link>
-          <a
-            href="#safety-and-privacy"
+          <Link
+            to="/#safety-and-privacy"
             className="px-2 lg:px-4 py-2 rounded-full font-title-md text-title-md text-on-surface-variant hover:text-on-surface transition-colors"
           >
             Safety & Privacy
-          </a>
+          </Link>
         </nav>
 
         {/* CTA and mobile navigation */}

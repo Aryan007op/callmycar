@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -7,6 +7,11 @@ import { saveVehicleToFirebase } from '../firebase';
 
 export default function Register() {
   const navigate = useNavigate();
+
+  const stateInputRef = useRef(null);
+  const districtInputRef = useRef(null);
+  const seriesInputRef = useRef(null);
+  const numberInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
     plateSegments: {
@@ -31,16 +36,92 @@ export default function Register() {
       ...prev,
       plateSegments: { ...prev.plateSegments, state: newState },
     }));
+    if (newState) {
+      districtInputRef.current?.focus();
+    }
   };
 
   const updateSegment = (segment, value) => {
     const cleaned = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     let maxLength = 2;
     if (segment === 'number') maxLength = 4;
+    const trimmed = cleaned.slice(0, maxLength);
+
     setFormData((prev) => ({
       ...prev,
-      plateSegments: { ...prev.plateSegments, [segment]: cleaned.slice(0, maxLength) },
+      plateSegments: { ...prev.plateSegments, [segment]: trimmed },
     }));
+
+    if (trimmed.length === maxLength) {
+      if (segment === 'state') {
+        districtInputRef.current?.focus();
+      } else if (segment === 'district') {
+        seriesInputRef.current?.focus();
+      } else if (segment === 'series') {
+        numberInputRef.current?.focus();
+      }
+    }
+  };
+
+  const handleKeyDown = (segment, e) => {
+    if (e.key === 'Backspace' && (!e.target.value || e.target.value === '')) {
+      let prevRef = null;
+      if (segment === 'district') {
+        prevRef = stateInputRef;
+      } else if (segment === 'series') {
+        prevRef = districtInputRef;
+      } else if (segment === 'number') {
+        prevRef = seriesInputRef;
+      }
+
+      if (prevRef?.current) {
+        e.preventDefault();
+        prevRef.current.focus();
+        const len = prevRef.current.value.length;
+        prevRef.current.setSelectionRange?.(len, len);
+      }
+    }
+  };
+
+  const handlePlatePaste = (e) => {
+    const pasteData = e.clipboardData?.getData('text');
+    if (!pasteData) return;
+    const cleaned = pasteData.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (cleaned.length > 2) {
+      e.preventDefault();
+      const state = cleaned.slice(0, 2);
+      const district = cleaned.slice(2, 4);
+      let series = '';
+      let number = '';
+      const remaining = cleaned.slice(4);
+      if (remaining.length > 4) {
+        series = remaining.slice(0, remaining.length - 4);
+        number = remaining.slice(remaining.length - 4);
+      } else if (remaining.length > 0 && /^[0-9]+$/.test(remaining)) {
+        number = remaining;
+      } else {
+        series = remaining.slice(0, 2);
+        number = remaining.slice(2, 6);
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        plateSegments: {
+          state,
+          district,
+          series: series.slice(0, 2),
+          number: number.slice(0, 4),
+        },
+      }));
+
+      if (number) {
+        numberInputRef.current?.focus();
+      } else if (series) {
+        seriesInputRef.current?.focus();
+      } else if (district) {
+        districtInputRef.current?.focus();
+      }
+    }
   };
 
   const getPlateString = () => {
@@ -413,42 +494,56 @@ export default function Register() {
                           <div className="flex items-center gap-2">
                             <input
                               id="plate-state"
+                              ref={stateInputRef}
                               type="text"
                               maxLength={2}
+                              required
                               value={formData.plateSegments.state}
-                              readOnly
+                              onChange={(e) => updateSegment('state', e.target.value)}
+                              onKeyDown={(e) => handleKeyDown('state', e)}
+                              onPaste={handlePlatePaste}
+                              placeholder="KA"
                               className="w-10 sm:w-14 h-12 shrink-0 text-center bg-surface-container font-code-plate text-[18px] sm:text-[22px] tracking-wider sm:tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none"
                             />
                             <span className="text-on-surface-variant text-xl font-bold"> </span>
                             <input
                               id="plate-district"
+                              ref={districtInputRef}
                               type="text"
                               maxLength={2}
                               required
                               value={formData.plateSegments.district}
                               onChange={(e) => updateSegment('district', e.target.value)}
+                              onKeyDown={(e) => handleKeyDown('district', e)}
+                              onPaste={handlePlatePaste}
                               placeholder="01"
                               className="w-10 sm:w-14 h-12 shrink-0 text-center bg-surface-bright font-code-plate text-[18px] sm:text-[22px] tracking-wider sm:tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none focus:bg-surface-container-low transition-colors"
                             />
                             <span className="text-on-surface-variant text-xl font-bold"> </span>
                             <input
                               id="plate-series"
+                              ref={seriesInputRef}
                               type="text"
                               maxLength={2}
                               required
                               value={formData.plateSegments.series}
                               onChange={(e) => updateSegment('series', e.target.value)}
+                              onKeyDown={(e) => handleKeyDown('series', e)}
+                              onPaste={handlePlatePaste}
                               placeholder="AB"
                               className="w-10 sm:w-14 h-12 shrink-0 text-center bg-surface-bright font-code-plate text-[18px] sm:text-[22px] tracking-wider sm:tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none focus:bg-surface-container-low transition-colors"
                             />
                             <span className="text-on-surface-variant text-xl font-bold"> </span>
                             <input
                               id="plate-number"
+                              ref={numberInputRef}
                               type="text"
                               maxLength={4}
                               required
                               value={formData.plateSegments.number}
                               onChange={(e) => updateSegment('number', e.target.value)}
+                              onKeyDown={(e) => handleKeyDown('number', e)}
+                              onPaste={handlePlatePaste}
                               placeholder="1234"
                               className="w-[68px] sm:w-24 h-12 shrink-0 text-center bg-surface-bright font-code-plate text-[18px] sm:text-[22px] tracking-wider sm:tracking-widest text-on-surface uppercase shadow-[2px_2px_0px_#111827] rounded-xl focus:outline-none focus:bg-surface-container-low transition-colors"
                             />
