@@ -1,6 +1,6 @@
-// Active Cloudflare Quick Tunnel for the local WhatsApp backend. This URL changes
-// if the Quick Tunnel is restarted; keep Vercel deployments in sync with it.
-const BASE_URL = 'https://accommodations-utah-gifts-unique.trycloudflare.com';
+// Prefer the deployment's configured backend. Without one, use the current
+// origin so Vite's local /api proxy and Vercel's /api routes continue to work.
+const BASE_URL = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
 export const apiUrl = (path) => `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 
 export async function registerVehicle(vehicleData) {

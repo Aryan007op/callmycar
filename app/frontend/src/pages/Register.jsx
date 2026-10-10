@@ -54,6 +54,7 @@ export default function Register() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [registeredResult, setRegisteredResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [registrationNotice, setRegistrationNotice] = useState('');
   const [telegramBotUsername, setTelegramBotUsername] = useState('');
 
   useEffect(() => {
@@ -88,15 +89,6 @@ export default function Register() {
 
     const cleanPlate = plate.replace(/\s+/g, '').toUpperCase();
     try {
-      const res = await registerVehicle({
-        ...formData,
-        plate,
-        telegramChatId: '',
-      });
-      if (!res?.success) {
-        throw new Error(res?.error || 'Registration failed. Please try again.');
-      }
-
       await saveVehicleToFirebase(cleanPlate, {
         name: 'Vehicle Owner',
         phone: formData.ownerPhone.trim(),
@@ -109,7 +101,25 @@ export default function Register() {
         plateDisplay: plate,
       });
 
-      setRegisteredResult(res.vehicle);
+      let backendVehicle = null;
+      try {
+        const response = await registerVehicle({
+          ...formData,
+          plate,
+          telegramChatId: '',
+        });
+        if (response?.success) backendVehicle = response.vehicle;
+      } catch (backendError) {
+        console.warn('Vehicle was saved to Firestore, but the relay backend did not respond:', backendError);
+        setRegistrationNotice('Your vehicle details are saved. Messaging and call alerts may be unavailable until the relay backend reconnects.');
+      }
+
+      const digits = formData.ownerPhone.replace(/\D/g, '');
+      setRegisteredResult(backendVehicle || {
+        plate,
+        displayName: displayName || 'Registered Vehicle',
+        ownerMaskedPhone: digits ? `•••• •••• ${digits.slice(-4)}` : 'Saved securely',
+      });
     } catch (error) {
       setErrorMsg('Could not register vehicle: ' + error.message);
     } finally {
@@ -229,6 +239,11 @@ export default function Register() {
                       now enrolled in CallMyCar. When anyone looks up this plate, our AI Voice Butler
                       or encrypted SMS gateway will alert your phone automatically.
                     </p>
+                    {registrationNotice && (
+                      <p role="status" className="rounded-xl bg-secondary-fixed p-3 font-body-sm text-on-secondary-fixed">
+                        {registrationNotice}
+                      </p>
+                    )}
                   </div>
 
                   {/* Digital Civic Decal */}
